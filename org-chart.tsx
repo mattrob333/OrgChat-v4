@@ -1,16 +1,19 @@
 "use client"
 
-import { useState } from "react"
-import { ChevronDown, ChevronUp, Users } from "lucide-react"
+import { useState, useEffect } from "react"
+import { ChevronDown, ChevronUp, Users, RefreshCw, AlertCircle } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 import EmployeePanel from "./employee-panel"
 import type { Person } from "./types/person"
+import type { OrgChartPerson } from "./types/database"
+import { getOrgChartData, getOrganizations } from "@/lib/org-service"
 
 interface OrgNodeProps {
-  person: Person
+  person: OrgChartPerson
   level: number
   isLast: boolean
   onSelectPerson: (person: Person) => void
@@ -34,7 +37,7 @@ const OrgNode = ({ person, level, isLast, onSelectPerson }: OrgNodeProps) => {
           className="w-full p-4 shadow-sm hover:shadow-md transition-shadow border border-border bg-card cursor-pointer hover:border-primary/30"
           onClick={(e) => {
             e.stopPropagation()
-            onSelectPerson(person)
+            onSelectPerson(person as unknown as Person)
           }}
         >
           <div className="flex items-start gap-4">
@@ -101,396 +104,65 @@ const OrgNode = ({ person, level, isLast, onSelectPerson }: OrgNodeProps) => {
 interface OrgChartProps {
   onSelectPerson?: (person: Person) => void
   containerWidth?: number
+  organizationId?: string
 }
 
-export default function OrgChart({ onSelectPerson, containerWidth }: OrgChartProps) {
+export default function OrgChart({ onSelectPerson, containerWidth, organizationId }: OrgChartProps) {
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null)
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [expanded, setExpanded] = useState(true)
+  
+  // Add state for loading, error, and organization data
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [orgData, setOrgData] = useState<OrgChartPerson | null>(null)
+  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([])
+  const [selectedOrgId, setSelectedOrgId] = useState<string | undefined>(organizationId)
 
-  // Enhanced sample data with responsibilities and bio
-  const orgData: Person = {
-    id: "1",
-    name: "Eleanor Rosevelt",
-    role: "Chief Executive Officer",
-    department: "Executive",
-    email: "eleanor.rosevelt@company.com",
-    image: "/placeholder.svg?height=40&width=40",
-    responsibilities: [
-      "Overall company strategy and vision",
-      "Executive leadership and decision making",
-      "Stakeholder and board relations",
-      "Company culture and values",
-    ],
-    bio: "Eleanor has over 20 years of experience in executive leadership roles across technology and finance sectors. She joined the company in 2018 and has led the organization through significant growth and transformation.",
-    children: [
-      {
-        id: "2",
-        name: "Marcus Chen",
-        role: "Chief Technology Officer",
-        department: "Technology",
-        email: "marcus.chen@company.com",
-        image: "/placeholder.svg?height=40&width=40",
-        responsibilities: [
-          "Technology strategy and roadmap",
-          "Engineering leadership",
-          "Technical architecture oversight",
-          "Innovation and R&D",
-        ],
-        bio: "Marcus has a background in computer science and has been with the company for 5 years. He previously worked at several leading tech companies and brings expertise in cloud infrastructure and AI.",
-        children: [
-          {
-            id: "6",
-            name: "Sarah Johnson",
-            role: "VP of Engineering",
-            department: "Engineering",
-            email: "sarah.johnson@company.com",
-            image: "/placeholder.svg?height=40&width=40",
-            responsibilities: [
-              "Engineering team leadership",
-              "Product development execution",
-              "Technical hiring and team growth",
-              "Engineering processes and quality",
-            ],
-            bio: "Sarah leads our engineering organization with a focus on scalable, maintainable software practices. She has a strong background in distributed systems and team leadership.",
-            children: [
-              {
-                id: "10",
-                name: "Michael Green",
-                role: "Engineering Manager",
-                department: "Engineering",
-                email: "michael.green@company.com",
-                image: "/placeholder.svg?height=40&width=40",
-                responsibilities: [
-                  "Frontend team management",
-                  "UI/UX implementation oversight",
-                  "Frontend architecture",
-                  "Developer experience",
-                ],
-                bio: "Michael manages our frontend engineering team, focusing on creating exceptional user experiences and maintainable code.",
-                children: [
-                  {
-                    id: "15",
-                    name: "Aisha Patel",
-                    role: "Senior Developer",
-                    department: "Engineering",
-                    email: "aisha.patel@company.com",
-                    image: "/placeholder.svg?height=40&width=40",
-                    responsibilities: [
-                      "Frontend architecture",
-                      "Component system design",
-                      "Performance optimization",
-                      "Mentoring junior developers",
-                    ],
-                    bio: "Aisha is a senior developer specializing in React and modern JavaScript frameworks. She leads our component library development and frontend architecture.",
-                    children: [
-                      {
-                        id: "20",
-                        name: "Ryan Cooper",
-                        role: "Junior Developer",
-                        department: "Engineering",
-                        email: "ryan.cooper@company.com",
-                        image: "/placeholder.svg?height=40&width=40",
-                        responsibilities: [
-                          "Frontend implementation",
-                          "Bug fixes and maintenance",
-                          "UI component development",
-                          "Testing and documentation",
-                        ],
-                        bio: "Ryan joined our team last year after completing a computer science degree. He's focused on frontend development and learning best practices.",
-                      },
-                      {
-                        id: "21",
-                        name: "Emma Mitchell",
-                        role: "Junior Developer",
-                        department: "Engineering",
-                        email: "emma.mitchell@company.com",
-                        image: "/placeholder.svg?height=40&width=40",
-                        responsibilities: [
-                          "Frontend implementation",
-                          "Accessibility improvements",
-                          "UI testing",
-                          "Documentation",
-                        ],
-                        bio: "Emma specializes in frontend development with a focus on accessibility and user experience. She joined the company after a successful internship program.",
-                      },
-                    ],
-                  },
-                  {
-                    id: "16",
-                    name: "David Kim",
-                    role: "Senior Developer",
-                    department: "Engineering",
-                    email: "david.kim@company.com",
-                    image: "/placeholder.svg?height=40&width=40",
-                    responsibilities: [
-                      "Backend architecture",
-                      "API design",
-                      "Performance optimization",
-                      "Security implementation",
-                    ],
-                    bio: "David is a backend specialist with expertise in distributed systems and database optimization. He leads our API development and backend architecture.",
-                  },
-                ],
-              },
-              {
-                id: "11",
-                name: "Jessica Taylor",
-                role: "Engineering Manager",
-                department: "Engineering",
-                email: "jessica.taylor@company.com",
-                image: "/placeholder.svg?height=40&width=40",
-                responsibilities: [
-                  "Backend team management",
-                  "API development oversight",
-                  "Backend architecture",
-                  "Developer experience",
-                ],
-                bio: "Jessica manages our backend engineering team, focusing on robust API development and backend architecture.",
-                children: [
-                  {
-                    id: "17",
-                    name: "Carlos Rodriguez",
-                    role: "Senior QA Engineer",
-                    department: "Quality Assurance",
-                    email: "carlos.rodriguez@company.com",
-                    image: "/placeholder.svg?height=40&width=40",
-                    responsibilities: [
-                      "QA strategy and implementation",
-                      "Test automation",
-                      "Bug tracking and resolution",
-                      "Continuous integration",
-                    ],
-                    bio: "Carlos is a senior QA engineer with experience in test automation and continuous integration. He ensures our software is of the highest quality.",
-                    children: [
-                      {
-                        id: "22",
-                        name: "Linda Hayes",
-                        role: "QA Engineer",
-                        department: "Quality Assurance",
-                        email: "linda.hayes@company.com",
-                        image: "/placeholder.svg?height=40&width=40",
-                        responsibilities: ["Manual testing", "Test case creation", "Bug reporting", "Documentation"],
-                        bio: "Linda is a QA engineer with a focus on manual testing and creating comprehensive test cases.",
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            id: "7",
-            name: "John Adams",
-            role: "VP of Infrastructure",
-            department: "Infrastructure",
-            email: "john.adams@company.com",
-            image: "/placeholder.svg?height=40&width=40",
-            responsibilities: [
-              "Infrastructure strategy and roadmap",
-              "Cloud infrastructure management",
-              "Network architecture",
-              "Security oversight",
-            ],
-            bio: "John has extensive experience in infrastructure management and cloud technologies. He leads our cloud infrastructure initiatives.",
-            children: [
-              {
-                id: "12",
-                name: "Patricia Morris",
-                role: "Cloud Infrastructure Lead",
-                department: "Infrastructure",
-                email: "patricia.morris@company.com",
-                image: "/placeholder.svg?height=40&width=40",
-                responsibilities: [
-                  "Cloud platform implementation",
-                  "Infrastructure as code",
-                  "Resource management",
-                  "Monitoring and logging",
-                ],
-                bio: "Patricia specializes in cloud infrastructure and infrastructure as code. She ensures our cloud resources are efficiently managed.",
-                children: [
-                  {
-                    id: "18",
-                    name: "Thomas Wilson",
-                    role: "DevOps Engineer",
-                    department: "Infrastructure",
-                    email: "thomas.wilson@company.com",
-                    image: "/placeholder.svg?height=40&width=40",
-                    responsibilities: [
-                      "DevOps practices implementation",
-                      "CI/CD pipeline management",
-                      "Automation scripting",
-                      "Infrastructure troubleshooting",
-                    ],
-                    bio: "Thomas is a DevOps engineer with expertise in CI/CD pipelines and automation. He streamlines our development and deployment processes.",
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-      {
-        id: "3",
-        name: "Sophia Williams",
-        role: "Chief Financial Officer",
-        department: "Finance",
-        email: "sophia.williams@company.com",
-        image: "/placeholder.svg?height=40&width=40",
-        responsibilities: [
-          "Financial strategy and planning",
-          "Budget management",
-          "Financial reporting",
-          "Risk assessment",
-        ],
-        bio: "Sophia has a strong background in finance and has been with the company for 10 years. She leads our financial planning and risk management initiatives.",
-        children: [
-          {
-            id: "8",
-            name: "Robert Brown",
-            role: "Finance Director",
-            department: "Finance",
-            email: "robert.brown@company.com",
-            image: "/placeholder.svg?height=40&width=40",
-            responsibilities: [
-              "Financial analysis",
-              "Account management",
-              "Tax compliance",
-              "Financial process optimization",
-            ],
-            bio: "Robert is a finance director with experience in financial analysis and account management. He ensures our financial processes are optimized.",
-            children: [
-              {
-                id: "13",
-                name: "Jennifer Lopez",
-                role: "Senior Accountant",
-                department: "Finance",
-                email: "jennifer.lopez@company.com",
-                image: "/placeholder.svg?height=40&width=40",
-                responsibilities: [
-                  "Account reconciliation",
-                  "Financial statement preparation",
-                  "Tax preparation",
-                  "Budget analysis",
-                ],
-                bio: "Jennifer is a senior accountant with expertise in financial statement preparation and tax compliance. She ensures accurate financial reporting.",
-              },
-            ],
-          },
-        ],
-      },
-      {
-        id: "4",
-        name: "James Wilson",
-        role: "Chief Marketing Officer",
-        department: "Marketing",
-        email: "james.wilson@company.com",
-        image: "/placeholder.svg?height=40&width=40",
-        responsibilities: [
-          "Marketing strategy and planning",
-          "Brand management",
-          "Campaign execution",
-          "Market analysis",
-        ],
-        bio: "James has a background in marketing and has been with the company for 7 years. He leads our marketing strategy and brand initiatives.",
-        children: [
-          {
-            id: "9",
-            name: "Elizabeth Clark",
-            role: "Marketing Director",
-            department: "Marketing",
-            email: "elizabeth.clark@company.com",
-            image: "/placeholder.svg?height=40&width=40",
-            responsibilities: [
-              "Marketing campaign management",
-              "Content creation",
-              "SEO optimization",
-              "Analytics and reporting",
-            ],
-            bio: "Elizabeth is a marketing director with experience in campaign management and content creation. She ensures our marketing efforts are effective.",
-            children: [
-              {
-                id: "14",
-                name: "Daniel Lee",
-                role: "Marketing Manager",
-                department: "Marketing",
-                email: "daniel.lee@company.com",
-                image: "/placeholder.svg?height=40&width=40",
-                responsibilities: [
-                  "Digital marketing",
-                  "Social media management",
-                  "Email marketing",
-                  "Marketing analytics",
-                ],
-                bio: "Daniel specializes in digital marketing and social media management. He drives our online marketing campaigns.",
-                children: [
-                  {
-                    id: "19",
-                    name: "Olivia Martinez",
-                    role: "Marketing Specialist",
-                    department: "Marketing",
-                    email: "olivia.martinez@company.com",
-                    image: "/placeholder.svg?height=40&width=40",
-                    responsibilities: ["Event planning", "PR coordination", "Marketing research", "Campaign support"],
-                    bio: "Olivia is a marketing specialist with a focus on event planning and PR coordination. She supports our marketing campaigns.",
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-      {
-        id: "5",
-        name: "Alexandra Peterson",
-        role: "Chief People Officer",
-        department: "Human Resources",
-        email: "alexandra.peterson@company.com",
-        image: "/placeholder.svg?height=40&width=40",
-        responsibilities: [
-          "HR strategy and planning",
-          "Employee recruitment and management",
-          "Training and development",
-          "Employee relations",
-        ],
-        bio: "Alexandra has a background in human resources and has been with the company for 8 years. She leads our HR initiatives and employee development.",
-        children: [
-          {
-            id: "23",
-            name: "William Thompson",
-            role: "HR Director",
-            department: "Human Resources",
-            email: "william.thompson@company.com",
-            image: "/placeholder.svg?height=40&width=40",
-            responsibilities: [
-              "HR operations management",
-              "Employee benefits and compensation",
-              "Performance management",
-              "Employee engagement",
-            ],
-            bio: "William is an HR director with experience in HR operations and employee benefits. He ensures our HR processes are efficient.",
-            children: [
-              {
-                id: "24",
-                name: "Mia Jackson",
-                role: "HR Manager",
-                department: "Human Resources",
-                email: "mia.jackson@company.com",
-                image: "/placeholder.svg?height=40&width=40",
-                responsibilities: [
-                  "Onboarding and orientation",
-                  "Employee training",
-                  "Performance reviews",
-                  "HR compliance",
-                ],
-                bio: "Mia is an HR manager with a focus on onboarding and employee training. She ensures new hires are well-integrated into the company.",
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  }
+  // Fetch organization data
+  useEffect(() => {
+    async function fetchOrganizations() {
+      try {
+        const orgs = await getOrganizations()
+        setOrganizations(orgs.map(org => ({ id: org.id, name: org.name })))
+        
+        // If no organizationId is provided and we have organizations, use the first one
+        if (!selectedOrgId && orgs.length > 0) {
+          setSelectedOrgId(orgs[0].id)
+        }
+      } catch (err) {
+        console.error("Error fetching organizations:", err)
+      }
+    }
+    
+    fetchOrganizations()
+  }, [organizationId, selectedOrgId])
+
+  // Fetch org chart data when selectedOrgId changes
+  useEffect(() => {
+    async function fetchOrgChartData() {
+      if (!selectedOrgId) return
+      
+      setIsLoading(true)
+      setError(null)
+      
+      try {
+        const data = await getOrgChartData(selectedOrgId)
+        if (data) {
+          setOrgData(data)
+        } else {
+          setError("No organization data found. Please upload your organization chart data.")
+        }
+      } catch (err) {
+        console.error("Error fetching org chart data:", err)
+        setError("Failed to load organization chart. Please try again later.")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    fetchOrgChartData()
+  }, [selectedOrgId])
 
   const handleSelectPerson = (person: Person) => {
     setSelectedPerson(person)
@@ -505,31 +177,117 @@ export default function OrgChart({ onSelectPerson, containerWidth }: OrgChartPro
   const handleClosePanel = () => {
     setIsPanelOpen(false)
   }
+  
+  // Refresh data
+  const handleRefreshData = async () => {
+    if (!selectedOrgId) return
+    setIsLoading(true)
+    setError(null)
+    
+    try {
+      const data = await getOrgChartData(selectedOrgId)
+      if (data) {
+        setOrgData(data)
+      } else {
+        setError("No organization data found. Please upload your organization chart data.")
+      }
+    } catch (err) {
+      console.error("Error refreshing org chart data:", err)
+      setError("Failed to refresh organization chart. Please try again later.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+  
+  // Render loading state
+  const renderLoading = () => {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-6">
+        <RefreshCw className="h-8 w-8 text-primary animate-spin mb-4" />
+        <h3 className="text-lg font-medium mb-2">Loading Organization Chart</h3>
+        <p className="text-sm text-muted-foreground text-center">
+          Please wait while we fetch your organization data...
+        </p>
+      </div>
+    )
+  }
+
+  // Render error state
+  const renderError = () => {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-6">
+        <Alert variant="destructive" className="max-w-md">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error Loading Organization Chart</AlertTitle>
+          <AlertDescription>
+            {error}
+            <div className="mt-4">
+              <Button variant="outline" size="sm" onClick={handleRefreshData}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Try Again
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
+  // Render empty state
+  const renderEmpty = () => {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-6">
+        <Alert className="max-w-md">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>No Organization Data</AlertTitle>
+          <AlertDescription>
+            No organization chart data found. Please upload your organization structure using the CSV upload tool.
+            <div className="mt-4">
+              <Button variant="outline" size="sm" onClick={() => window.location.href = "/upload"}>
+                Upload Organization Data
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 w-full h-full overflow-auto bg-background">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Company Organization Chart</h1>
-        <Button
-          variant="outline"
-          onClick={() => {
-            const expandAll = (node: Person) => {
-              if (node.children) {
-                node.children.forEach(expandAll)
-              }
-              return { ...node }
-            }
-            expandAll(orgData)
-            setExpanded(!expanded)
-          }}
-          className="border-primary/20 hover:border-primary hover:bg-primary/10"
-        >
-          {expanded ? "Collapse All" : "Expand All"}
-        </Button>
-      </div>
-      <div className="space-y-4 mt-6">
-        <OrgNode person={orgData} level={0} isLast={true} onSelectPerson={handleSelectPerson} />
-      </div>
+      {isLoading ? (
+        renderLoading()
+      ) : error ? (
+        renderError()
+      ) : !orgData ? (
+        renderEmpty()
+      ) : (
+        <>
+          <div className="mb-4 flex items-center justify-between">
+            <h1 className="text-2xl font-bold">Company Organization Chart</h1>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setExpanded(!expanded)}
+                className="border-primary/20 hover:border-primary hover:bg-primary/10"
+              >
+                {expanded ? "Collapse All" : "Expand All"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleRefreshData}
+                className="border-primary/20 hover:border-primary hover:bg-primary/10"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-4 mt-6">
+            <OrgNode person={orgData} level={0} isLast={true} onSelectPerson={handleSelectPerson} />
+          </div>
+        </>
+      )}
 
       {/* Only show the panel if we're not using the sidebar integration */}
       {!onSelectPerson && <EmployeePanel person={selectedPerson} isOpen={isPanelOpen} onClose={handleClosePanel} />}
