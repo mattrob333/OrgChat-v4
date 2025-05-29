@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-import { getAIResponse } from "./lib/openai-service"
-import { useSettingsStore } from "./lib/settings-store"
+import { getAIResponse, type AISettings } from "@/lib/openai-service"
+import { useSettingsStore } from "@/lib/settings-store"
 import type { Person, Message } from "./types/person"
 import AISettingsPanel from "./ai-settings-panel"
 import { useToast } from "@/components/ui/use-toast"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { getCalendarConnections, getCalendarEvents } from "@/lib/org-service"
 
 interface EmployeePanelProps {
   person: Person | null
@@ -90,8 +91,8 @@ export default function EmployeePanel({ person, isOpen, onClose, embedded = fals
       // Get AI settings for this employee
       const settings = getSettings(person.id)
 
-      // Get AI response
-      const response = await getAIResponse(person, inputValue, settings, conversationHistory)
+      // Get AI response - use personId instead of person object
+      const response = await getAIResponse(person.id, inputValue, settings, conversationHistory)
 
       const aiMessage: Message = {
         id: `ai-${Date.now()}`,
@@ -138,9 +139,63 @@ export default function EmployeePanel({ person, isOpen, onClose, embedded = fals
   }
 
   // Handle calendar check
-  const handleCheckCalendar = () => {
-    // This would be replaced with actual calendar integration
-    alert(`Checking calendar for ${person?.name}`)
+  const handleCheckCalendar = async () => {
+    if (!person) return
+    
+    try {
+      // Get calendar connections for this person
+      const calendarConnections = await getCalendarConnections(person.id)
+      
+      if (calendarConnections.length === 0) {
+        toast({
+          title: "No Calendar Connected",
+          description: `${person.name} has no calendar connections set up.`,
+          variant: "default",
+        })
+        return
+      }
+      
+      const connectedCalendars = calendarConnections.filter(c => c.connected)
+      
+      if (connectedCalendars.length === 0) {
+        toast({
+          title: "Calendar Not Connected",
+          description: `${person.name} has calendar accounts but none are currently connected.`,
+          variant: "default",
+        })
+        return
+      }
+      
+      // Get events for the first connected calendar
+      const calendarId = connectedCalendars[0].id
+      const events = await getCalendarEvents(calendarId)
+      
+      // Show upcoming events
+      const upcomingEvents = events
+        .filter(e => new Date(e.start_time) >= new Date())
+        .slice(0, 5)
+      
+      if (upcomingEvents.length === 0) {
+        toast({
+          title: "Calendar",
+          description: `${person.name} has no upcoming events.`,
+          variant: "default",
+        })
+      } else {
+        toast({
+          title: `${person.name}'s Calendar`,
+          description: `${upcomingEvents.length} upcoming events found. Calendar integration UI will be available soon.`,
+          variant: "default",
+        })
+      }
+    } catch (error) {
+      console.error("Error checking calendar:", error)
+      toast({
+        title: "Calendar Error",
+        description: "Failed to retrieve calendar information.",
+        variant: "destructive",
+      })
+    }
   }
 
   // Toggle details section
