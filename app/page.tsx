@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import OrgTreeCanvas from "../org-tree-canvas"
-import OrgChart from "../org-chart"
+import OrgTable from "@/components/org-table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AIChatPanel } from "@/components/ai-chat-panel"
 import type { Person } from "../types/person"
@@ -79,7 +79,7 @@ export default function Page() {
                 value="tree"
                 className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
               >
-                Hierarchical Tree
+                Data Table
               </TabsTrigger>
             </TabsList>
             <TabsContent value="canvas" className="flex-1 overflow-hidden">
@@ -90,7 +90,7 @@ export default function Page() {
               />
             </TabsContent>
             <TabsContent value="tree" className="flex-1 overflow-auto">
-              <OrgChart onSelectPerson={handleSelectPerson} containerWidth={containerDimensions.width} />
+              <OrgTable onSelectPerson={handleSelectPerson} containerWidth={containerDimensions.width} />
             </TabsContent>
           </Tabs>
         </div>
