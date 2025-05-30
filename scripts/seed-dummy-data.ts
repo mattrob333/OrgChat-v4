@@ -199,7 +199,8 @@ const dummyData = {
       timezone: "America/Los_Angeles",
       bio: "Full-stack developer passionate about clean code",
       responsibilities: ["Feature Implementation", "Bug Fixes", "Testing"],
-      managerEmail: "sophie.anderson@techcorp.com"
+      managerEmail: "sophie.anderson@techcorp.com",
+      enneagram_type: "9 - The Peacemaker"
     },
     {
       name: "Amanda White",
@@ -297,7 +298,8 @@ async function seedDatabase() {
       timezone: emp.timezone,
       bio: emp.bio,
       responsibilities: emp.responsibilities,
-      organization_id: org.id
+      organization_id: org.id,
+      enneagram_type: emp.enneagram_type || null
     }))
 
     const { data: employees, error: empError } = await supabase

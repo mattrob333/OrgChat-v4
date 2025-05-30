@@ -221,7 +221,7 @@ export default function OrgTable({
     email: "",
     role: "",
     department_id: "",
-    manager_id: "",
+    manager_email: "",
     enneagram_type: "",
   });
 
@@ -264,78 +264,68 @@ export default function OrgTable({
   }, [organizationId, selectedOrganization]);
 
   // Transform org chart data for table display
-  const transformOrgChartForTable = async (orgChartData: OrgChartPerson): Promise<TablePerson[]> => {
+  const transformOrgChartForTable = async (orgChartData: OrgChartPerson | null): Promise<TablePerson[]> => {
+    if (!orgChartData) return [];
+    
     const tableData: TablePerson[] = [];
     
-    // Function to recursively flatten the org chart
-    const flattenOrgChart = async (person: OrgChartPerson, managerName?: string, managerEmail?: string) => {
+    const processNode = async (person: OrgChartPerson, managerName?: string, managerEmail?: string) => {
       // Get department name
-      let departmentName = "";
-      if (person.department_id) {
-        const dept = departments.find(d => d.id === person.department_id);
-        departmentName = dept?.name || "";
-      }
+      const department = departments.find(d => d.id === person.department_id);
+      const department_name = department?.name || "Unknown";
       
-      // Get manager email
-      let manager_email = managerEmail || "";
-      if (person.manager_id && !managerEmail) {
-        const { data } = await supabase
-          .from('people')
-          .select('email')
-          .eq('id', person.manager_id)
-          .single();
-          
-        if (data) {
-          manager_email = data.email;
-        }
-      }
+      // Get manager email if we have a relationship but not the email
+      let manager_email = managerEmail;
+      
+      // We don't have manager_id on OrgChartPerson, so we'll skip this check
+      // The manager relationship is already handled by the org chart structure
       
       // Add person to table data
       tableData.push({
         ...person,
         manager_name: managerName,
-        manager_email,
-        department_name: departmentName,
+        manager_email: manager_email || "",
+        department_name,
         isEditing: false,
+        enneagram_type: person.enneagram_type || undefined, // Convert null to undefined
       });
       
-      // Process children recursively
+      // Process children
       if (person.children && person.children.length > 0) {
         for (const child of person.children) {
-          await flattenOrgChart(child, person.name, person.email);
+          await processNode(child, person.name, person.email);
         }
       }
     };
     
-    // Start with the root person
-    await flattenOrgChart(orgChartData);
-    
+    await processNode(orgChartData);
     return tableData;
   };
 
   // Handle sorting
   const handleSort = (key: keyof TablePerson) => {
     let direction: "asc" | "desc" = "asc";
-    
-    if (sortConfig.key === key) {
-      direction = sortConfig.direction === "asc" ? "desc" : "asc";
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
     }
-    
     setSortConfig({ key, direction });
     
     const sortedData = [...filteredPeople].sort((a, b) => {
-      if (a[key] === null || a[key] === undefined) return 1;
-      if (b[key] === null || b[key] === undefined) return -1;
+      const aValue = a[key];
+      const bValue = b[key];
       
-      if (typeof a[key] === 'string' && typeof b[key] === 'string') {
+      if (aValue === null || aValue === undefined) return 1;
+      if (bValue === null || bValue === undefined) return -1;
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
         return direction === "asc" 
-          ? (a[key] as string).localeCompare(b[key] as string)
-          : (b[key] as string).localeCompare(a[key] as string);
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
       }
       
       return direction === "asc" 
-        ? (a[key] as number) - (b[key] as number)
-        : (b[key] as number) - (a[key] as number);
+        ? (aValue as unknown as number) - (bValue as unknown as number)
+        : (bValue as unknown as number) - (aValue as unknown as number);
     });
     
     setFilteredPeople(sortedData);
@@ -361,21 +351,24 @@ export default function OrgTable({
       filtered = filtered.filter(person => person.department_id === departmentFilter);
     }
     
-    // Apply sorting if set
-    if (sortConfig.key) {
+    // Apply sorting
+    if (sortConfig && sortConfig.key) {
       filtered = filtered.sort((a, b) => {
-        if (a[sortConfig.key] === null || a[sortConfig.key] === undefined) return 1;
-        if (b[sortConfig.key] === null || b[sortConfig.key] === undefined) return -1;
+        const aValue = a[sortConfig.key as keyof TablePerson];
+        const bValue = b[sortConfig.key as keyof TablePerson];
         
-        if (typeof a[sortConfig.key] === 'string' && typeof b[sortConfig.key] === 'string') {
+        if (aValue === null || aValue === undefined) return 1;
+        if (bValue === null || bValue === undefined) return -1;
+        
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
           return sortConfig.direction === "asc" 
-            ? (a[sortConfig.key] as string).localeCompare(b[sortConfig.key] as string)
-            : (b[sortConfig.key] as string).localeCompare(a[sortConfig.key] as string);
+            ? aValue.localeCompare(bValue)
+            : bValue.localeCompare(aValue);
         }
         
         return sortConfig.direction === "asc" 
-          ? (a[sortConfig.key] as number) - (b[sortConfig.key] as number)
-          : (b[sortConfig.key] as number) - (a[sortConfig.key] as number);
+          ? (aValue as unknown as number) - (bValue as unknown as number)
+          : (bValue as unknown as number) - (aValue as unknown as number);
       });
     }
     
@@ -436,7 +429,7 @@ export default function OrgTable({
             const { error: relationshipError } = await supabase
               .from('reporting_relationships')
               .update({ manager_id: managerData.id })
-              .eq('report_id', editingPerson.id);
+              .eq('id', existingRelationship[0].id);
               
             if (relationshipError) throw relationshipError;
           } else {
@@ -480,12 +473,15 @@ export default function OrgTable({
       }
       
       // Check if email already exists
-      const { data: existingPerson } = await supabase
+      const { data: existingPerson, error: existingError } = await supabase
         .from('people')
         .select('id')
-        .eq('email', newPerson.email);
+        .eq('email', newPerson.email)
+        .maybeSingle();
         
-      if (existingPerson && existingPerson.length > 0) {
+      if (existingError) throw existingError;
+      
+      if (existingPerson) {
         setError("A person with this email already exists.");
         return;
       }
@@ -510,15 +506,26 @@ export default function OrgTable({
       if (personError) throw personError;
       
       // Add reporting relationship if manager is specified
-      if (newPerson.manager_id) {
-        const { error: relationshipError } = await supabase
-          .from('reporting_relationships')
-          .insert({
-            manager_id: newPerson.manager_id,
-            report_id: personData[0].id,
-          });
+      if (newPerson.manager_email) {
+        // First, get the manager's ID from their email
+        const { data: managerData, error: managerError } = await supabase
+          .from('people')
+          .select('id')
+          .eq('email', newPerson.manager_email)
+          .maybeSingle();
           
-        if (relationshipError) throw relationshipError;
+        if (managerError) throw managerError;
+        
+        if (managerData) {
+          const { error: relationshipError } = await supabase
+            .from('reporting_relationships')
+            .insert({
+              manager_id: managerData.id,
+              report_id: personData[0].id,
+            });
+            
+          if (relationshipError) throw relationshipError;
+        }
       }
       
       // Clear cache and refresh data
@@ -531,7 +538,7 @@ export default function OrgTable({
         email: "",
         role: "",
         department_id: "",
-        manager_id: "",
+        manager_email: "",
         enneagram_type: "",
       });
       
@@ -917,17 +924,16 @@ export default function OrgTable({
             const { data: existingRel, error: relError } = await supabase
               .from('reporting_relationships')
               .select('id')
-              .eq('report_id', person.id)
-              .maybeSingle();
+              .eq('report_id', person.id);
               
             if (relError) throw relError;
             
-            if (existingRel) {
+            if (existingRel && existingRel.length > 0) {
               // Update existing relationship
               const { error: updateError } = await supabase
                 .from('reporting_relationships')
                 .update({ manager_id: manager.id })
-                .eq('id', existingRel.id);
+                .eq('id', existingRel[0].id);
                 
               if (updateError) throw updateError;
             } else {
@@ -1117,12 +1123,12 @@ export default function OrgTable({
                   onClick={() => handleSort('name')}
                 >
                   Name
-                  {sortConfig.key === 'name' && (
+                  {sortConfig && sortConfig.key === 'name' && (
                     sortConfig.direction === 'asc' 
                       ? <ChevronUp className="ml-1 h-4 w-4" /> 
                       : <ChevronDown className="ml-1 h-4 w-4" />
                   )}
-                  {sortConfig.key !== 'name' && (
+                  {sortConfig && sortConfig.key !== 'name' && (
                     <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
                   )}
                 </div>
@@ -1133,12 +1139,12 @@ export default function OrgTable({
                   onClick={() => handleSort('role')}
                 >
                   Role
-                  {sortConfig.key === 'role' && (
+                  {sortConfig && sortConfig.key === 'role' && (
                     sortConfig.direction === 'asc' 
                       ? <ChevronUp className="ml-1 h-4 w-4" /> 
                       : <ChevronDown className="ml-1 h-4 w-4" />
                   )}
-                  {sortConfig.key !== 'role' && (
+                  {sortConfig && sortConfig.key !== 'role' && (
                     <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
                   )}
                 </div>
@@ -1149,12 +1155,12 @@ export default function OrgTable({
                   onClick={() => handleSort('department_name')}
                 >
                   Department
-                  {sortConfig.key === 'department_name' && (
+                  {sortConfig && sortConfig.key === 'department_name' && (
                     sortConfig.direction === 'asc' 
                       ? <ChevronUp className="ml-1 h-4 w-4" /> 
                       : <ChevronDown className="ml-1 h-4 w-4" />
                   )}
-                  {sortConfig.key !== 'department_name' && (
+                  {sortConfig && sortConfig.key !== 'department_name' && (
                     <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
                   )}
                 </div>
@@ -1165,12 +1171,12 @@ export default function OrgTable({
                   onClick={() => handleSort('manager_name')}
                 >
                   Reports To
-                  {sortConfig.key === 'manager_name' && (
+                  {sortConfig && sortConfig.key === 'manager_name' && (
                     sortConfig.direction === 'asc' 
                       ? <ChevronUp className="ml-1 h-4 w-4" /> 
                       : <ChevronDown className="ml-1 h-4 w-4" />
                   )}
-                  {sortConfig.key !== 'manager_name' && (
+                  {sortConfig && sortConfig.key !== 'manager_name' && (
                     <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
                   )}
                 </div>
@@ -1181,12 +1187,12 @@ export default function OrgTable({
                   onClick={() => handleSort('enneagram_type')}
                 >
                   Enneagram
-                  {sortConfig.key === 'enneagram_type' && (
+                  {sortConfig && sortConfig.key === 'enneagram_type' && (
                     sortConfig.direction === 'asc' 
                       ? <ChevronUp className="ml-1 h-4 w-4" /> 
                       : <ChevronDown className="ml-1 h-4 w-4" />
                   )}
-                  {sortConfig.key !== 'enneagram_type' && (
+                  {sortConfig && sortConfig.key !== 'enneagram_type' && (
                     <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
                   )}
                 </div>
@@ -1310,14 +1316,14 @@ export default function OrgTable({
                   <TableCell>
                     {editingId === person.id ? (
                       <Select
-                        value={editingPerson?.enneagram_type || ""}
-                        onValueChange={(value) => setEditingPerson({ ...editingPerson!, enneagram_type: value })}
+                        value={editingPerson?.enneagram_type || "none"}
+                        onValueChange={(value) => setEditingPerson({ ...editingPerson!, enneagram_type: value === "none" ? "" : value })}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select type" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Not Set</SelectItem>
+                          <SelectItem value="none">Not Set</SelectItem>
                           {ENNEAGRAM_TYPES.map((type) => (
                             <SelectItem key={type.id} value={type.id}>
                               {type.name}
@@ -1750,8 +1756,8 @@ export default function OrgTable({
             <div className="space-y-2">
               <Label htmlFor="manager">Reports To</Label>
               <Select
-                value={newPerson.manager_id}
-                onValueChange={(value) => setNewPerson({ ...newPerson, manager_id: value })}
+                value={newPerson.manager_email}
+                onValueChange={(value) => setNewPerson({ ...newPerson, manager_email: value })}
               >
                 <SelectTrigger id="manager">
                   <SelectValue placeholder="Select manager" />
@@ -1759,7 +1765,7 @@ export default function OrgTable({
                 <SelectContent>
                   <SelectItem value="">No Manager</SelectItem>
                   {people.map((person) => (
-                    <SelectItem key={person.id} value={person.id}>
+                    <SelectItem key={person.id} value={person.email}>
                       {person.name}
                     </SelectItem>
                   ))}
@@ -1770,14 +1776,14 @@ export default function OrgTable({
             <div className="space-y-2">
               <Label htmlFor="enneagram">Enneagram Type</Label>
               <Select
-                value={newPerson.enneagram_type}
-                onValueChange={(value) => setNewPerson({ ...newPerson, enneagram_type: value })}
+                value={newPerson.enneagram_type || "none"}
+                onValueChange={(value) => setNewPerson({ ...newPerson, enneagram_type: value === "none" ? "" : value })}
               >
                 <SelectTrigger id="enneagram">
                   <SelectValue placeholder="Select enneagram type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Not Set</SelectItem>
+                  <SelectItem value="none">Not Set</SelectItem>
                   {ENNEAGRAM_TYPES.map((type) => (
                     <SelectItem key={type.id} value={type.id}>
                       {type.name}
