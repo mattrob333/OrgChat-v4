@@ -80,6 +80,7 @@ CREATE TABLE people (
   image TEXT,
   responsibilities TEXT[],
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  enneagram_type TEXT CHECK (enneagram_type IN ('1', '2', '3', '4', '5', '6', '7', '8', '9')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -100,7 +101,7 @@ CREATE TABLE reporting_relationships (
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT unique_reporting_relationship UNIQUE (manager_id, report_id)
+  CONSTRAINT unique_reporting_relationship UNIQUE (report_id)
 );
 
 CREATE TRIGGER update_reporting_relationships_updated_at
@@ -111,23 +112,18 @@ CREATE INDEX idx_reporting_manager ON reporting_relationships(manager_id);
 CREATE INDEX idx_reporting_report ON reporting_relationships(report_id);
 CREATE INDEX idx_reporting_organization ON reporting_relationships(organization_id);
 
--- AI settings table
+-- AI Settings table
 CREATE TABLE ai_settings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   person_id UUID NOT NULL REFERENCES people(id) ON DELETE CASCADE,
-  model TEXT NOT NULL DEFAULT 'gpt-4o',
-  temperature FLOAT NOT NULL DEFAULT 0.7,
-  max_tokens INTEGER NOT NULL DEFAULT 500,
-  top_p FLOAT NOT NULL DEFAULT 0.95,
-  frequency_penalty FLOAT NOT NULL DEFAULT 0,
-  presence_penalty FLOAT NOT NULL DEFAULT 0,
-  system_prompt TEXT,
   persona user_persona NOT NULL DEFAULT 'professional',
-  knowledge_level knowledge_level NOT NULL DEFAULT 'expert',
+  knowledge_level knowledge_level NOT NULL DEFAULT 'intermediate',
   response_style response_style NOT NULL DEFAULT 'balanced',
+  max_response_length INTEGER NOT NULL DEFAULT 500,
+  include_citations BOOLEAN NOT NULL DEFAULT true,
+  use_emoji BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT unique_person_ai_settings UNIQUE (person_id)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TRIGGER update_ai_settings_updated_at
@@ -136,18 +132,15 @@ FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
 CREATE INDEX idx_ai_settings_person ON ai_settings(person_id);
 
--- Calendar connections table
+-- Calendar Connections table
 CREATE TABLE calendar_connections (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   person_id UUID NOT NULL REFERENCES people(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  type calendar_type NOT NULL,
-  email TEXT NOT NULL,
-  connected BOOLEAN NOT NULL DEFAULT false,
-  access_token TEXT,
+  calendar_type calendar_type NOT NULL,
+  access_token TEXT NOT NULL,
   refresh_token TEXT,
   token_expires_at TIMESTAMPTZ,
-  last_sync TIMESTAMPTZ,
+  calendar_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -158,46 +151,18 @@ FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
 CREATE INDEX idx_calendar_connections_person ON calendar_connections(person_id);
 
--- Calendar events table
-CREATE TABLE calendar_events (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  calendar_id UUID NOT NULL REFERENCES calendar_connections(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  description TEXT,
-  start_time TIMESTAMPTZ NOT NULL,
-  end_time TIMESTAMPTZ NOT NULL,
-  location TEXT,
-  is_all_day BOOLEAN NOT NULL DEFAULT false,
-  attendees JSONB,
-  external_id TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TRIGGER update_calendar_events_updated_at
-BEFORE UPDATE ON calendar_events
-FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-
-CREATE INDEX idx_calendar_events_calendar ON calendar_events(calendar_id);
-CREATE INDEX idx_calendar_events_start_time ON calendar_events(start_time);
-CREATE INDEX idx_calendar_events_external_id ON calendar_events(external_id);
-
--- Calendar settings table
+-- Calendar Settings table
 CREATE TABLE calendar_settings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   person_id UUID NOT NULL REFERENCES people(id) ON DELETE CASCADE,
-  show_meeting_details BOOLEAN NOT NULL DEFAULT true,
-  show_attendees BOOLEAN NOT NULL DEFAULT true,
-  show_private_events BOOLEAN NOT NULL DEFAULT false,
-  show_declined_events BOOLEAN NOT NULL DEFAULT false,
-  buffer_time INTEGER NOT NULL DEFAULT 15,
-  max_meetings_per_day INTEGER,
-  preferred_meeting_length INTEGER NOT NULL DEFAULT 30,
-  minimum_scheduling_notice TEXT NOT NULL DEFAULT '1day',
-  meeting_types TEXT[] NOT NULL DEFAULT '{"1:1 Meetings", "Team Meetings", "Client Meetings"}',
+  working_hours_start TIME NOT NULL DEFAULT '09:00:00',
+  working_hours_end TIME NOT NULL DEFAULT '17:00:00',
+  working_days INTEGER[] NOT NULL DEFAULT '{1,2,3,4,5}', -- 0 = Sunday, 1 = Monday, etc.
+  auto_decline_outside_hours BOOLEAN NOT NULL DEFAULT false,
+  auto_suggest_meeting_times BOOLEAN NOT NULL DEFAULT true,
+  default_meeting_duration INTEGER NOT NULL DEFAULT 30, -- in minutes
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT unique_person_calendar_settings UNIQUE (person_id)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TRIGGER update_calendar_settings_updated_at
@@ -206,20 +171,45 @@ FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
 CREATE INDEX idx_calendar_settings_person ON calendar_settings(person_id);
 
--- Communication preferences table
+-- Calendar Events table
+CREATE TABLE calendar_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  person_id UUID NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  start_time TIMESTAMPTZ NOT NULL,
+  end_time TIMESTAMPTZ NOT NULL,
+  location TEXT,
+  is_all_day BOOLEAN NOT NULL DEFAULT false,
+  is_recurring BOOLEAN NOT NULL DEFAULT false,
+  recurrence_rule TEXT,
+  external_event_id TEXT,
+  calendar_connection_id UUID REFERENCES calendar_connections(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER update_calendar_events_updated_at
+BEFORE UPDATE ON calendar_events
+FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+
+CREATE INDEX idx_calendar_events_person ON calendar_events(person_id);
+CREATE INDEX idx_calendar_events_start_time ON calendar_events(start_time);
+CREATE INDEX idx_calendar_events_connection ON calendar_events(calendar_connection_id);
+
+-- Communication Preferences table
 CREATE TABLE communication_preferences (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   person_id UUID NOT NULL REFERENCES people(id) ON DELETE CASCADE,
-  email_notifications BOOLEAN NOT NULL DEFAULT true,
-  in_app_notifications BOOLEAN NOT NULL DEFAULT true,
-  sms_notifications BOOLEAN NOT NULL DEFAULT false,
-  meeting_reminders BOOLEAN NOT NULL DEFAULT true,
-  task_reminders BOOLEAN NOT NULL DEFAULT true,
-  mention_notifications BOOLEAN NOT NULL DEFAULT true,
-  team_updates BOOLEAN NOT NULL DEFAULT true,
+  preferred_contact_method TEXT NOT NULL DEFAULT 'email',
+  notification_email BOOLEAN NOT NULL DEFAULT true,
+  notification_slack BOOLEAN NOT NULL DEFAULT false,
+  notification_mobile BOOLEAN NOT NULL DEFAULT false,
+  do_not_disturb_start TIME,
+  do_not_disturb_end TIME,
+  do_not_disturb_days INTEGER[],
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT unique_person_communication_preferences UNIQUE (person_id)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TRIGGER update_communication_preferences_updated_at
@@ -235,33 +225,33 @@ CREATE TABLE tasks (
   description TEXT,
   status task_status NOT NULL DEFAULT 'not-started',
   priority task_priority NOT NULL DEFAULT 'medium',
-  due_date DATE,
-  category TEXT NOT NULL,
-  person_id UUID NOT NULL REFERENCES people(id) ON DELETE CASCADE,
-  assignee_id UUID REFERENCES people(id) ON DELETE SET NULL,
+  due_date TIMESTAMPTZ,
+  assigned_by UUID REFERENCES people(id) ON DELETE SET NULL,
+  assigned_to UUID NOT NULL REFERENCES people(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at TIMESTAMPTZ
 );
 
 CREATE TRIGGER update_tasks_updated_at
 BEFORE UPDATE ON tasks
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
-CREATE INDEX idx_tasks_person ON tasks(person_id);
-CREATE INDEX idx_tasks_assignee ON tasks(assignee_id);
-CREATE INDEX idx_tasks_due_date ON tasks(due_date);
+CREATE INDEX idx_tasks_assigned_to ON tasks(assigned_to);
+CREATE INDEX idx_tasks_assigned_by ON tasks(assigned_by);
 CREATE INDEX idx_tasks_status ON tasks(status);
+CREATE INDEX idx_tasks_due_date ON tasks(due_date);
 
 -- Documents table
 CREATE TABLE documents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  person_id UUID NOT NULL REFERENCES people(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  file_path TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  file_url TEXT NOT NULL,
   file_type TEXT NOT NULL,
   file_size INTEGER NOT NULL,
-  description TEXT,
-  tags TEXT[],
+  uploaded_by UUID NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  is_public BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -270,217 +260,133 @@ CREATE TRIGGER update_documents_updated_at
 BEFORE UPDATE ON documents
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
-CREATE INDEX idx_documents_person ON documents(person_id);
+CREATE INDEX idx_documents_uploaded_by ON documents(uploaded_by);
 
--- Create storage bucket for documents
--- INSERT INTO storage.buckets (id, name) VALUES ('documents', 'documents');
+-- Create a view for organization chart
+CREATE OR REPLACE VIEW org_chart_view AS
+WITH RECURSIVE org_tree AS (
+  -- Root nodes (people without managers)
+  SELECT 
+    p.id, 
+    p.name, 
+    p.role, 
+    p.department_id, 
+    p.email,
+    p.phone,
+    p.location,
+    p.timezone,
+    p.bio,
+    p.image,
+    p.responsibilities,
+    p.organization_id,
+    p.enneagram_type,
+    NULL::UUID as manager_id,
+    0 as level
+  FROM 
+    people p
+  WHERE 
+    p.id NOT IN (SELECT report_id FROM reporting_relationships)
+  
+  UNION ALL
+  
+  -- Children nodes
+  SELECT 
+    p.id, 
+    p.name, 
+    p.role, 
+    p.department_id, 
+    p.email,
+    p.phone,
+    p.location,
+    p.timezone,
+    p.bio,
+    p.image,
+    p.responsibilities,
+    p.organization_id,
+    p.enneagram_type,
+    r.manager_id,
+    ot.level + 1
+  FROM 
+    people p
+  JOIN 
+    reporting_relationships r ON p.id = r.report_id
+  JOIN 
+    org_tree ot ON r.manager_id = ot.id
+)
+SELECT * FROM org_tree;
 
--- Row Level Security (RLS) Policies
--- Note: These will be enabled once authentication is implemented
+-- Function to get the full org chart for an organization
+CREATE OR REPLACE FUNCTION get_org_chart(org_id UUID)
+RETURNS SETOF org_chart_view AS $$
+  SELECT * FROM org_chart_view WHERE organization_id = org_id ORDER BY level, name;
+$$ LANGUAGE SQL;
 
--- Enable RLS on all tables
+-- Function to get all children for a given person
+CREATE OR REPLACE FUNCTION get_children(person_id UUID)
+RETURNS SETOF org_chart_view AS $$
+  WITH RECURSIVE children AS (
+    -- Direct reports
+    SELECT 
+      p.id, 
+      p.name, 
+      p.role, 
+      p.department_id, 
+      p.email,
+      p.phone,
+      p.location,
+      p.timezone,
+      p.bio,
+      p.image,
+      p.responsibilities,
+      p.organization_id,
+      p.enneagram_type,
+      r.manager_id,
+      1 as level
+    FROM 
+      people p
+    JOIN 
+      reporting_relationships r ON p.id = r.report_id
+    WHERE 
+      r.manager_id = person_id
+    
+    UNION ALL
+    
+    -- Indirect reports (reports of reports)
+    SELECT 
+      p.id, 
+      p.name, 
+      p.role, 
+      p.department_id, 
+      p.email,
+      p.phone,
+      p.location,
+      p.timezone,
+      p.bio,
+      p.image,
+      p.responsibilities,
+      p.organization_id,
+      p.enneagram_type,
+      r.manager_id,
+      c.level + 1
+    FROM 
+      people p
+    JOIN 
+      reporting_relationships r ON p.id = r.report_id
+    JOIN 
+      children c ON r.manager_id = c.id
+  )
+  SELECT * FROM children ORDER BY level, name;
+$$ LANGUAGE SQL;
+
+-- Security policies (enable row level security)
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE departments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE people ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reporting_relationships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE calendar_connections ENABLE ROW LEVEL SECURITY;
-ALTER TABLE calendar_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE calendar_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE calendar_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE communication_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
-
--- For now, create temporary policies that allow all operations
--- These should be replaced with proper policies once authentication is implemented
-CREATE POLICY "Allow all operations for organizations" ON organizations FOR ALL USING (true);
-CREATE POLICY "Allow all operations for departments" ON departments FOR ALL USING (true);
-CREATE POLICY "Allow all operations for people" ON people FOR ALL USING (true);
-CREATE POLICY "Allow all operations for reporting_relationships" ON reporting_relationships FOR ALL USING (true);
-CREATE POLICY "Allow all operations for ai_settings" ON ai_settings FOR ALL USING (true);
-CREATE POLICY "Allow all operations for calendar_connections" ON calendar_connections FOR ALL USING (true);
-CREATE POLICY "Allow all operations for calendar_events" ON calendar_events FOR ALL USING (true);
-CREATE POLICY "Allow all operations for calendar_settings" ON calendar_settings FOR ALL USING (true);
-CREATE POLICY "Allow all operations for communication_preferences" ON communication_preferences FOR ALL USING (true);
-CREATE POLICY "Allow all operations for tasks" ON tasks FOR ALL USING (true);
-CREATE POLICY "Allow all operations for documents" ON documents FOR ALL USING (true);
-
--- Sample data for testing (optional, uncomment to use)
-/*
--- Insert sample organization
-INSERT INTO organizations (name, description)
-VALUES ('Sample Company', 'A sample company for testing');
-
--- Get the organization ID
-DO $$
-DECLARE
-  org_id UUID;
-BEGIN
-  SELECT id INTO org_id FROM organizations LIMIT 1;
-  
-  -- Insert departments
-  INSERT INTO departments (name, organization_id)
-  VALUES 
-    ('Executive', org_id),
-    ('Technology', org_id),
-    ('Engineering', org_id),
-    ('Finance', org_id),
-    ('Marketing', org_id),
-    ('Human Resources', org_id);
-    
-  -- Continue with other sample data...
-END $$;
-*/
-
--- Create views for easier data access
-CREATE OR REPLACE VIEW org_chart_view AS
-SELECT 
-  p.id,
-  p.name,
-  p.role,
-  p.email,
-  p.phone,
-  p.location,
-  p.timezone,
-  p.bio,
-  p.image,
-  p.responsibilities,
-  d.name AS department,
-  p.organization_id,
-  o.name AS organization_name,
-  rr.manager_id
-FROM 
-  people p
-JOIN 
-  departments d ON p.department_id = d.id
-JOIN 
-  organizations o ON p.organization_id = o.id
-LEFT JOIN 
-  reporting_relationships rr ON p.id = rr.report_id;
-
--- Create function to get org chart hierarchy
-CREATE OR REPLACE FUNCTION get_org_chart(org_id UUID)
-RETURNS JSONB AS $$
-DECLARE
-  result JSONB;
-BEGIN
-  WITH RECURSIVE org_tree AS (
-    -- Find root nodes (people without managers)
-    SELECT 
-      p.id,
-      p.name,
-      p.role,
-      d.name AS department,
-      p.email,
-      p.image,
-      p.bio,
-      p.responsibilities,
-      0 AS level
-    FROM 
-      people p
-    JOIN 
-      departments d ON p.department_id = d.id
-    LEFT JOIN 
-      reporting_relationships rr ON p.id = rr.report_id
-    WHERE 
-      p.organization_id = org_id AND rr.id IS NULL
-    
-    UNION ALL
-    
-    -- Find children recursively
-    SELECT 
-      p.id,
-      p.name,
-      p.role,
-      d.name AS department,
-      p.email,
-      p.image,
-      p.bio,
-      p.responsibilities,
-      ot.level + 1
-    FROM 
-      people p
-    JOIN 
-      departments d ON p.department_id = d.id
-    JOIN 
-      reporting_relationships rr ON p.id = rr.report_id
-    JOIN 
-      org_tree ot ON rr.manager_id = ot.id
-    WHERE 
-      p.organization_id = org_id
-  )
-  SELECT 
-    jsonb_build_object(
-      'id', root.id,
-      'name', root.name,
-      'role', root.role,
-      'department', root.department,
-      'email', root.email,
-      'image', root.image,
-      'bio', root.bio,
-      'responsibilities', CASE WHEN root.responsibilities IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(root.responsibilities) END,
-      'children', COALESCE(
-        (SELECT jsonb_agg(
-          jsonb_build_object(
-            'id', child.id,
-            'name', child.name,
-            'role', child.role,
-            'department', child.department,
-            'email', child.email,
-            'image', child.image,
-            'bio', child.bio,
-            'responsibilities', CASE WHEN child.responsibilities IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(child.responsibilities) END,
-            'children', get_children(child.id)
-          )
-        )
-        FROM org_tree child
-        JOIN reporting_relationships rr ON child.id = rr.report_id
-        WHERE rr.manager_id = root.id),
-        '[]'::jsonb
-      )
-    ) INTO result
-  FROM 
-    org_tree root
-  WHERE 
-    root.level = 0
-  LIMIT 1;
-  
-  RETURN result;
-END;
-$$ LANGUAGE plpgsql;
-
--- Helper function to get children recursively
-CREATE OR REPLACE FUNCTION get_children(parent_id UUID)
-RETURNS JSONB AS $$
-DECLARE
-  result JSONB;
-BEGIN
-  SELECT 
-    COALESCE(
-      jsonb_agg(
-        jsonb_build_object(
-          'id', p.id,
-          'name', p.name,
-          'role', p.role,
-          'department', d.name,
-          'email', p.email,
-          'image', p.image,
-          'bio', p.bio,
-          'responsibilities', CASE WHEN p.responsibilities IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(p.responsibilities) END,
-          'children', get_children(p.id)
-        )
-      ),
-      '[]'::jsonb
-    ) INTO result
-  FROM 
-    people p
-  JOIN 
-    departments d ON p.department_id = d.id
-  JOIN 
-    reporting_relationships rr ON p.id = rr.report_id
-  WHERE 
-    rr.manager_id = parent_id;
-    
-  RETURN result;
-END;
-$$ LANGUAGE plpgsql;
