@@ -31,8 +31,17 @@ export default function AISettingsPanel({ person, onClose }: AISettingsPanelProp
 
   // Update preview prompt when settings change
   useEffect(() => {
-    setPreviewPrompt(generateSystemPrompt(person, settings))
-  }, [person, settings])
+    const updatePreview = async () => {
+      try {
+        const prompt = await generateSystemPrompt(person.id, settings)
+        setPreviewPrompt(prompt)
+      } catch (error) {
+        console.error('Error generating preview prompt:', error)
+        setPreviewPrompt('Error generating preview prompt')
+      }
+    }
+    updatePreview()
+  }, [person.id, settings])
 
   // Handle saving settings
   const handleSave = () => {
