@@ -107,8 +107,8 @@ Email: eleanor.rosevelt@company.com`
         <h2 className="text-2xl font-bold">AI Clone Settings</h2>
       </div>
 
-      <Alert variant="info" className="bg-primary/10 border-primary/20">
-        <AlertCircle className="h-4 w-4 text-primary" />
+      <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-900">
+        <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
         <AlertTitle>AI Clone Configuration</AlertTitle>
         <AlertDescription>
           These settings control how your AI clone responds to questions from team members when you're not available.

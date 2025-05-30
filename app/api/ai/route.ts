@@ -39,15 +39,14 @@ export async function POST(request: Request) {
     const finalSystemPrompt = systemPrompt || HR_ASSISTANT_SYSTEM_PROMPT
 
     const response = await generateText({
-      model: openai(model || "gpt-4o", {
-        temperature: temperature || 0.7,
-        maxTokens: maxTokens || 1000,
-        topP: topP || 1,
-        frequencyPenalty: frequencyPenalty || 0,
-        presencePenalty: presencePenalty || 0,
-      }),
+      model: openai(model || "gpt-4o"),
       prompt,
       system: finalSystemPrompt,
+      temperature: temperature || 0.7,
+      maxTokens: maxTokens || 1000,
+      topP: topP || 1,
+      frequencyPenalty: frequencyPenalty || 0,
+      presencePenalty: presencePenalty || 0,
     })
 
     return NextResponse.json({ text: response.text })

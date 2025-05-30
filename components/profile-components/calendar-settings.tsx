@@ -378,8 +378,8 @@ export default function CalendarSettings() {
             </div>
           </div>
 
-          <Alert variant="info" className="bg-primary/10 border-primary/20">
-            <AlertCircle className="h-4 w-4 text-primary" />
+          <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-900">
+            <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             <AlertTitle>Calendar Integration</AlertTitle>
             <AlertDescription>
               Your AI clone will use this calendar information to accurately respond to questions about your

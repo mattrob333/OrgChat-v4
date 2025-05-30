@@ -71,7 +71,12 @@ export default function ChatSidebar({ className }: ChatSidebarProps) {
           </TabsContent>
           <TabsContent value="employee" className="h-[calc(100vh-48px)] overflow-hidden">
             {selectedPerson ? (
-              <EmployeePanel person={selectedPerson} embedded={true} onClose={() => setActiveTab("hr")} />
+              <EmployeePanel 
+                person={selectedPerson} 
+                isOpen={true}
+                embedded={true} 
+                onClose={() => setActiveTab("hr")} 
+              />
             ) : (
               <div className="flex h-full items-center justify-center">
                 <p className="text-muted-foreground">Select an employee from the org chart</p>
