@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
+import type { Person as BasePerson } from "@/types/person"
 import { Input } from "@/components/ui/input"
 import { 
   Table, 
@@ -130,12 +131,33 @@ Bob Johnson,bob.johnson@company.com,Engineering Manager,Engineering,jane.smith@c
 Alice Williams,alice.williams@company.com,Senior Developer,Engineering,bob.johnson@company.com,4,8 years of development experience,555-456-7890,Remote,Europe/London,"Frontend development, UI/UX design"
 `
 
-interface TablePerson extends OrgChartPerson {
-  manager_name?: string;
-  manager_email?: string;
-  department_name?: string;
+// Define a new interface that matches the structure of Person but makes all fields optional
+// Define a new interface that doesn't extend BasePerson to avoid type conflicts
+interface TablePerson {
+  id: string;
+  name: string;
+  role: string;
+  email: string;
+  image?: string | null;
+  responsibilities?: string | string[] | null;
+  bio?: string | null;
+  children?: TablePerson[];
+  
+  // Additional fields for the table
+  manager_name?: string | null;
+  manager_email?: string | null;
+  department_name?: string | null;
+  department_id?: string | null;
   isEditing?: boolean;
-  enneagram_type?: string;
+  enneagram_type?: string | null;
+  phone?: string | null;
+  location?: string | null;
+  timezone?: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+  
+  // For compatibility with the table sorting
+  [key: string]: any;
 }
 
 interface CSVPerson {
@@ -190,7 +212,7 @@ export default function OrgTable({
   // State for sorting and filtering
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "", direction: "asc" });
   const [searchTerm, setSearchTerm] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState<string>("");
+  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   
   // State for CSV upload
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
@@ -223,6 +245,11 @@ export default function OrgTable({
     department_id: "",
     manager_email: "",
     enneagram_type: "",
+    phone: "",
+    location: "",
+    timezone: "",
+    responsibilities: [],
+    bio: "",
   });
 
   // Fetch data on component mount
@@ -302,34 +329,57 @@ export default function OrgTable({
     return tableData;
   };
 
-  // Handle sorting
+  // Handle sorting with type safety
   const handleSort = (key: keyof TablePerson) => {
-    let direction: "asc" | "desc" = "asc";
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === "asc") {
-      direction = "desc";
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
     }
     setSortConfig({ key, direction });
-    
-    const sortedData = [...filteredPeople].sort((a, b) => {
-      const aValue = a[key];
-      const bValue = b[key];
+  };
+
+  // Safe comparison function for sorting
+  const compareValues = (a: unknown, b: unknown): number => {
+    if (a === b) return 0;
+    if (a == null) return 1; // null/undefined values go to the end
+    if (b == null) return -1;
+    return a < b ? -1 : 1;
+  };
+
+  // Sort data based on sortConfig
+  const sortedData = useMemo(() => {
+    if (!sortConfig.key) return filteredPeople;
+
+    return [...filteredPeople].sort((a, b) => {
+      const aValue = a[sortConfig.key as keyof TablePerson];
+      const bValue = b[sortConfig.key as keyof TablePerson];
       
-      if (aValue === null || aValue === undefined) return 1;
-      if (bValue === null || bValue === undefined) return -1;
+      // Handle null/undefined values
+      if (aValue == null && bValue == null) return 0;
+      if (aValue == null) return sortConfig.direction === 'asc' ? 1 : -1;
+      if (bValue == null) return sortConfig.direction === 'asc' ? -1 : 1;
       
+      // Handle string comparison
       if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return direction === "asc" 
+        return sortConfig.direction === 'asc' 
           ? aValue.localeCompare(bValue)
           : bValue.localeCompare(aValue);
       }
       
-      return direction === "asc" 
-        ? (aValue as unknown as number) - (bValue as unknown as number)
-        : (bValue as unknown as number) - (aValue as unknown as number);
+      // Handle array comparison (for responsibilities)
+      if (Array.isArray(aValue) && Array.isArray(bValue)) {
+        const aStr = aValue.join(',');
+        const bStr = bValue.join(',');
+        return sortConfig.direction === 'asc' 
+          ? aStr.localeCompare(bStr)
+          : bStr.localeCompare(aStr);
+      }
+      
+      // Default comparison for other types
+      const compareResult = aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      return sortConfig.direction === 'asc' ? compareResult : -compareResult;
     });
-    
-    setFilteredPeople(sortedData);
-  };
+  }, [filteredPeople, sortConfig]);
 
   // Handle search and filtering
   useEffect(() => {
@@ -347,7 +397,7 @@ export default function OrgTable({
     }
     
     // Apply department filter
-    if (departmentFilter) {
+    if (departmentFilter !== "all") {
       filtered = filtered.filter(person => person.department_id === departmentFilter);
     }
     
@@ -1077,7 +1127,7 @@ export default function OrgTable({
             <SelectValue placeholder="Filter by department" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Departments</SelectItem>
+            <SelectItem value="all">All Departments</SelectItem>
             {departments.map((dept) => (
               <SelectItem key={dept.id} value={dept.id}>
                 {dept.name}
@@ -1113,314 +1163,316 @@ export default function OrgTable({
       )}
       
       {/* Table */}
-      <div className="border rounded-md">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[250px]">
-                <div 
-                  className="flex items-center cursor-pointer"
-                  onClick={() => handleSort('name')}
-                >
-                  Name
-                  {sortConfig && sortConfig.key === 'name' && (
-                    sortConfig.direction === 'asc' 
-                      ? <ChevronUp className="ml-1 h-4 w-4" /> 
-                      : <ChevronDown className="ml-1 h-4 w-4" />
-                  )}
-                  {sortConfig && sortConfig.key !== 'name' && (
-                    <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
-                  )}
-                </div>
-              </TableHead>
-              <TableHead>
-                <div 
-                  className="flex items-center cursor-pointer"
-                  onClick={() => handleSort('role')}
-                >
-                  Role
-                  {sortConfig && sortConfig.key === 'role' && (
-                    sortConfig.direction === 'asc' 
-                      ? <ChevronUp className="ml-1 h-4 w-4" /> 
-                      : <ChevronDown className="ml-1 h-4 w-4" />
-                  )}
-                  {sortConfig && sortConfig.key !== 'role' && (
-                    <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
-                  )}
-                </div>
-              </TableHead>
-              <TableHead>
-                <div 
-                  className="flex items-center cursor-pointer"
-                  onClick={() => handleSort('department_name')}
-                >
-                  Department
-                  {sortConfig && sortConfig.key === 'department_name' && (
-                    sortConfig.direction === 'asc' 
-                      ? <ChevronUp className="ml-1 h-4 w-4" /> 
-                      : <ChevronDown className="ml-1 h-4 w-4" />
-                  )}
-                  {sortConfig && sortConfig.key !== 'department_name' && (
-                    <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
-                  )}
-                </div>
-              </TableHead>
-              <TableHead>
-                <div 
-                  className="flex items-center cursor-pointer"
-                  onClick={() => handleSort('manager_name')}
-                >
-                  Reports To
-                  {sortConfig && sortConfig.key === 'manager_name' && (
-                    sortConfig.direction === 'asc' 
-                      ? <ChevronUp className="ml-1 h-4 w-4" /> 
-                      : <ChevronDown className="ml-1 h-4 w-4" />
-                  )}
-                  {sortConfig && sortConfig.key !== 'manager_name' && (
-                    <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
-                  )}
-                </div>
-              </TableHead>
-              <TableHead>
-                <div 
-                  className="flex items-center cursor-pointer"
-                  onClick={() => handleSort('enneagram_type')}
-                >
-                  Enneagram
-                  {sortConfig && sortConfig.key === 'enneagram_type' && (
-                    sortConfig.direction === 'asc' 
-                      ? <ChevronUp className="ml-1 h-4 w-4" /> 
-                      : <ChevronDown className="ml-1 h-4 w-4" />
-                  )}
-                  {sortConfig && sortConfig.key !== 'enneagram_type' && (
-                    <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
-                  )}
-                </div>
-              </TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Location</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
+      <div className="border rounded-md overflow-hidden">
+        <div className="max-h-[600px] overflow-y-auto">
+          <Table>
+            <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8">
-                  <div className="flex flex-col items-center justify-center">
-                    <RefreshCw className="h-6 w-6 animate-spin text-primary mb-2" />
-                    <p>Loading organization data...</p>
+                <TableHead className="w-[250px]">
+                  <div 
+                    className="flex items-center cursor-pointer"
+                    onClick={() => handleSort('name')}
+                  >
+                    Name
+                    {sortConfig && sortConfig.key === 'name' && (
+                      sortConfig.direction === 'asc' 
+                        ? <ChevronUp className="ml-1 h-4 w-4" /> 
+                        : <ChevronDown className="ml-1 h-4 w-4" />
+                    )}
+                    {sortConfig && sortConfig.key !== 'name' && (
+                      <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
+                    )}
                   </div>
-                </TableCell>
-              </TableRow>
-            ) : filteredPeople.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} className="text-center py-8">
-                  <div className="flex flex-col items-center justify-center">
-                    <AlertCircle className="h-6 w-6 text-muted-foreground mb-2" />
-                    <p>No people found.</p>
-                    <Button 
-                      variant="link" 
-                      onClick={() => setIsUploadDialogOpen(true)}
-                      className="mt-2"
-                    >
-                      Import from CSV
-                    </Button>
+                </TableHead>
+                <TableHead>
+                  <div 
+                    className="flex items-center cursor-pointer"
+                    onClick={() => handleSort('role')}
+                  >
+                    Role
+                    {sortConfig && sortConfig.key === 'role' && (
+                      sortConfig.direction === 'asc' 
+                        ? <ChevronUp className="ml-1 h-4 w-4" /> 
+                        : <ChevronDown className="ml-1 h-4 w-4" />
+                    )}
+                    {sortConfig && sortConfig.key !== 'role' && (
+                      <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
+                    )}
                   </div>
-                </TableCell>
+                </TableHead>
+                <TableHead>
+                  <div 
+                    className="flex items-center cursor-pointer"
+                    onClick={() => handleSort('department_name')}
+                  >
+                    Department
+                    {sortConfig && sortConfig.key === 'department_name' && (
+                      sortConfig.direction === 'asc' 
+                        ? <ChevronUp className="ml-1 h-4 w-4" /> 
+                        : <ChevronDown className="ml-1 h-4 w-4" />
+                    )}
+                    {sortConfig && sortConfig.key !== 'department_name' && (
+                      <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
+                    )}
+                  </div>
+                </TableHead>
+                <TableHead>
+                  <div 
+                    className="flex items-center cursor-pointer"
+                    onClick={() => handleSort('manager_name')}
+                  >
+                    Reports To
+                    {sortConfig && sortConfig.key === 'manager_name' && (
+                      sortConfig.direction === 'asc' 
+                        ? <ChevronUp className="ml-1 h-4 w-4" /> 
+                        : <ChevronDown className="ml-1 h-4 w-4" />
+                    )}
+                    {sortConfig && sortConfig.key !== 'manager_name' && (
+                      <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
+                    )}
+                  </div>
+                </TableHead>
+                <TableHead>
+                  <div 
+                    className="flex items-center cursor-pointer"
+                    onClick={() => handleSort('enneagram_type')}
+                  >
+                    Enneagram
+                    {sortConfig && sortConfig.key === 'enneagram_type' && (
+                      sortConfig.direction === 'asc' 
+                        ? <ChevronUp className="ml-1 h-4 w-4" /> 
+                        : <ChevronDown className="ml-1 h-4 w-4" />
+                    )}
+                    {sortConfig && sortConfig.key !== 'enneagram_type' && (
+                      <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />
+                    )}
+                  </div>
+                </TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
-            ) : (
-              filteredPeople.map((person) => (
-                <TableRow key={person.id}>
-                  <TableCell className="font-medium">
-                    {editingId === person.id ? (
-                      <Input
-                        value={editingPerson?.name || ""}
-                        onChange={(e) => setEditingPerson({ ...editingPerson!, name: e.target.value })}
-                      />
-                    ) : (
-                      <div className="flex items-center space-x-2">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={person.image || "/placeholder.svg"} alt={person.name} />
-                          <AvatarFallback>
-                            {person.name
-                              .split(" ")
-                              .map((part) => part[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span 
-                          className="cursor-pointer hover:text-primary"
-                          onClick={() => onSelectPerson && onSelectPerson(person as unknown as Person)}
-                        >
-                          {person.name}
-                        </span>
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingId === person.id ? (
-                      <Input
-                        value={editingPerson?.role || ""}
-                        onChange={(e) => setEditingPerson({ ...editingPerson!, role: e.target.value })}
-                      />
-                    ) : (
-                      person.role
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingId === person.id ? (
-                      <Select
-                        value={editingPerson?.department_id || ""}
-                        onValueChange={(value) => setEditingPerson({ ...editingPerson!, department_id: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select department" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {departments.map((dept) => (
-                            <SelectItem key={dept.id} value={dept.id}>
-                              {dept.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      person.department_name
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingId === person.id ? (
-                      <Select
-                        value={editingPerson?.manager_email || ""}
-                        onValueChange={(value) => setEditingPerson({ ...editingPerson!, manager_email: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select manager" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">No Manager</SelectItem>
-                          {people
-                            .filter(p => p.id !== person.id) // Can't report to yourself
-                            .map((p) => (
-                              <SelectItem key={p.id} value={p.email}>
-                                {p.name}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      person.manager_name || "—"
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingId === person.id ? (
-                      <Select
-                        value={editingPerson?.enneagram_type || "none"}
-                        onValueChange={(value) => setEditingPerson({ ...editingPerson!, enneagram_type: value === "none" ? "" : value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Not Set</SelectItem>
-                          {ENNEAGRAM_TYPES.map((type) => (
-                            <SelectItem key={type.id} value={type.id}>
-                              {type.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      person.enneagram_type ? (
-                        <Badge variant="outline">
-                          Type {person.enneagram_type}
-                        </Badge>
-                      ) : (
-                        "—"
-                      )
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingId === person.id ? (
-                      <Input
-                        value={editingPerson?.email || ""}
-                        onChange={(e) => setEditingPerson({ ...editingPerson!, email: e.target.value })}
-                      />
-                    ) : (
-                      person.email
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingId === person.id ? (
-                      <Input
-                        value={editingPerson?.phone || ""}
-                        onChange={(e) => setEditingPerson({ ...editingPerson!, phone: e.target.value })}
-                      />
-                    ) : (
-                      person.phone || "—"
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingId === person.id ? (
-                      <Input
-                        value={editingPerson?.location || ""}
-                        onChange={(e) => setEditingPerson({ ...editingPerson!, location: e.target.value })}
-                      />
-                    ) : (
-                      person.location || "—"
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {editingId === person.id ? (
-                      <div className="flex justify-end space-x-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={cancelEditing}
-                        >
-                          Cancel
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          onClick={saveEditing}
-                        >
-                          Save
-                        </Button>
-                      </div>
-                    ) : (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem 
-                            onClick={() => onSelectPerson && onSelectPerson(person as unknown as Person)}
-                          >
-                            View Profile
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => startEditing(person)}>
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => handleDeletePerson(person.id)}
-                          >
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8">
+                    <div className="flex flex-col items-center justify-center">
+                      <RefreshCw className="h-6 w-6 animate-spin text-primary mb-2" />
+                      <p>Loading organization data...</p>
+                    </div>
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : filteredPeople.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8">
+                    <div className="flex flex-col items-center justify-center">
+                      <AlertCircle className="h-6 w-6 text-muted-foreground mb-2" />
+                      <p>No people found.</p>
+                      <Button 
+                        variant="link" 
+                        onClick={() => setIsUploadDialogOpen(true)}
+                        className="mt-2"
+                      >
+                        Import from CSV
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredPeople.map((person) => (
+                  <TableRow key={person.id}>
+                    <TableCell className="font-medium">
+                      {editingId === person.id ? (
+                        <Input
+                          value={editingPerson?.name || ""}
+                          onChange={(e) => setEditingPerson({ ...editingPerson!, name: e.target.value })}
+                        />
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={person.image || "/placeholder.svg"} alt={person.name} />
+                            <AvatarFallback>
+                              {person.name
+                                .split(" ")
+                                .map((part) => part[0])
+                                .join("")}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span 
+                            className="cursor-pointer hover:text-primary"
+                            onClick={() => onSelectPerson && onSelectPerson(person as unknown as Person)}
+                          >
+                            {person.name}
+                          </span>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingId === person.id ? (
+                        <Input
+                          value={editingPerson?.role || ""}
+                          onChange={(e) => setEditingPerson({ ...editingPerson!, role: e.target.value })}
+                        />
+                      ) : (
+                        person.role
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingId === person.id ? (
+                        <Select
+                          value={editingPerson?.department_id || ""}
+                          onValueChange={(value) => setEditingPerson({ ...editingPerson!, department_id: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select department" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {departments.map((dept) => (
+                              <SelectItem key={dept.id} value={dept.id}>
+                                {dept.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        person.department_name
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingId === person.id ? (
+                        <Select
+                          value={editingPerson?.manager_email || "no-manager"}
+                          onValueChange={(value) => setEditingPerson({ ...editingPerson!, manager_email: value === "no-manager" ? "" : value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select manager" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="no-manager">No Manager</SelectItem>
+                            {people
+                              .filter(p => p.id !== person.id) // Can't report to yourself
+                              .map((p) => (
+                                <SelectItem key={p.id} value={p.email}>
+                                  {p.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        person.manager_name || "-"
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingId === person.id ? (
+                        <Select
+                          value={editingPerson?.enneagram_type || "not-set"}
+                          onValueChange={(value) => setEditingPerson({ ...editingPerson!, enneagram_type: value === "not-set" ? "" : value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="not-set">Not Set</SelectItem>
+                            {ENNEAGRAM_TYPES.map((type) => (
+                              <SelectItem key={type.id} value={type.id}>
+                                {type.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        person.enneagram_type ? (
+                          <Badge variant="outline">
+                            Type {person.enneagram_type}
+                          </Badge>
+                        ) : (
+                          "-"
+                        )
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingId === person.id ? (
+                        <Input
+                          value={editingPerson?.email || ""}
+                          onChange={(e) => setEditingPerson({ ...editingPerson!, email: e.target.value })}
+                        />
+                      ) : (
+                        person.email
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingId === person.id ? (
+                        <Input
+                          value={editingPerson?.phone || ""}
+                          onChange={(e) => setEditingPerson({ ...editingPerson!, phone: e.target.value })}
+                        />
+                      ) : (
+                        person.phone || "-"
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingId === person.id ? (
+                        <Input
+                          value={editingPerson?.location || ""}
+                          onChange={(e) => setEditingPerson({ ...editingPerson!, location: e.target.value })}
+                        />
+                      ) : (
+                        person.location || "-"
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {editingId === person.id ? (
+                        <div className="flex justify-end space-x-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={cancelEditing}
+                          >
+                            Cancel
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            onClick={saveEditing}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                      ) : (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem 
+                              onClick={() => onSelectPerson && onSelectPerson(person as unknown as Person)}
+                            >
+                              View Profile
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => startEditing(person)}>
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => handleDeletePerson(person.id)}
+                            >
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
       
       {/* CSV Upload Dialog */}
@@ -1570,7 +1622,7 @@ export default function OrgTable({
                         <TableCell>{row.department}</TableCell>
                         <TableCell>{row.manager_email || "—"}</TableCell>
                         <TableCell>
-                          {row.enneagram_type ? `Type ${row.enneagram_type}` : "—"}
+                          {row.enneagram_type ? `Type ${row.enneagram_type}` : "—" }
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1707,8 +1759,8 @@ export default function OrgTable({
               <Label htmlFor="name">Name *</Label>
               <Input
                 id="name"
-                value={newPerson.name}
-                onChange={(e) => setNewPerson({ ...newPerson, name: e.target.value })}
+                value={newPerson.name || ''}
+                onChange={(e) => setNewPerson({ ...newPerson, name: e.target.value || '' })}
                 placeholder="John Doe"
               />
             </div>
@@ -1737,7 +1789,7 @@ export default function OrgTable({
             <div className="space-y-2">
               <Label htmlFor="department">Department *</Label>
               <Select
-                value={newPerson.department_id}
+                value={newPerson.department_id || ""}
                 onValueChange={(value) => setNewPerson({ ...newPerson, department_id: value })}
               >
                 <SelectTrigger id="department">
@@ -1756,14 +1808,14 @@ export default function OrgTable({
             <div className="space-y-2">
               <Label htmlFor="manager">Reports To</Label>
               <Select
-                value={newPerson.manager_email}
-                onValueChange={(value) => setNewPerson({ ...newPerson, manager_email: value })}
+                value={newPerson.manager_email || "no-manager"}
+                onValueChange={(value) => setNewPerson({ ...newPerson, manager_email: value === "no-manager" ? null : value })}
               >
                 <SelectTrigger id="manager">
                   <SelectValue placeholder="Select manager" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No Manager</SelectItem>
+                  <SelectItem value="no-manager">No Manager</SelectItem>
                   {people.map((person) => (
                     <SelectItem key={person.id} value={person.email}>
                       {person.name}
@@ -1776,14 +1828,14 @@ export default function OrgTable({
             <div className="space-y-2">
               <Label htmlFor="enneagram">Enneagram Type</Label>
               <Select
-                value={newPerson.enneagram_type || "none"}
-                onValueChange={(value) => setNewPerson({ ...newPerson, enneagram_type: value === "none" ? "" : value })}
+                value={newPerson.enneagram_type || "not-set"}
+                onValueChange={(value) => setNewPerson({ ...newPerson, enneagram_type: value === "not-set" ? "" : value })}
               >
                 <SelectTrigger id="enneagram">
                   <SelectValue placeholder="Select enneagram type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Not Set</SelectItem>
+                  <SelectItem value="not-set">Not Set</SelectItem>
                   {ENNEAGRAM_TYPES.map((type) => (
                     <SelectItem key={type.id} value={type.id}>
                       {type.name}

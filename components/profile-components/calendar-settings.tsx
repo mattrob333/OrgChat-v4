@@ -378,7 +378,7 @@ export default function CalendarSettings() {
             </div>
           </div>
 
-          <Alert variant="info" className="bg-primary/10 border-primary/20">
+          <Alert className="bg-primary/10 border-primary/20">
             <AlertCircle className="h-4 w-4 text-primary" />
             <AlertTitle>Calendar Integration</AlertTitle>
             <AlertDescription>

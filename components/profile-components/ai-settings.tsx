@@ -107,7 +107,7 @@ Email: eleanor.rosevelt@company.com`
         <h2 className="text-2xl font-bold">AI Clone Settings</h2>
       </div>
 
-      <Alert variant="info" className="bg-primary/10 border-primary/20">
+      <Alert className="bg-primary/10 border-primary/20">
         <AlertCircle className="h-4 w-4 text-primary" />
         <AlertTitle>AI Clone Configuration</AlertTitle>
         <AlertDescription>

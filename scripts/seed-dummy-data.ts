@@ -38,7 +38,8 @@ const dummyData = {
       timezone: "America/Los_Angeles",
       bio: "Visionary leader with 20+ years of experience in tech industry",
       responsibilities: ["Company Strategy", "Board Relations", "Executive Leadership"],
-      managerEmail: null
+      managerEmail: null,
+      enneagram_type: "8"
     },
     // C-Suite
     {
@@ -51,7 +52,8 @@ const dummyData = {
       timezone: "America/Los_Angeles",
       bio: "Technology innovator passionate about scalable systems",
       responsibilities: ["Technical Strategy", "Engineering Leadership", "Innovation"],
-      managerEmail: "sarah.johnson@techcorp.com"
+      managerEmail: "sarah.johnson@techcorp.com",
+      enneagram_type: "5"
     },
     {
       name: "Emily Rodriguez",
@@ -63,7 +65,8 @@ const dummyData = {
       timezone: "America/New_York",
       bio: "Strategic financial leader with expertise in growth companies",
       responsibilities: ["Financial Planning", "Investor Relations", "Risk Management"],
-      managerEmail: "sarah.johnson@techcorp.com"
+      managerEmail: "sarah.johnson@techcorp.com",
+      enneagram_type: "3"
     },
     {
       name: "David Kim",
@@ -75,7 +78,8 @@ const dummyData = {
       timezone: "America/Los_Angeles",
       bio: "Creative marketing executive focused on brand growth",
       responsibilities: ["Brand Strategy", "Marketing Campaigns", "Customer Insights"],
-      managerEmail: "sarah.johnson@techcorp.com"
+      managerEmail: "sarah.johnson@techcorp.com",
+      enneagram_type: "7"
     },
     // VPs
     {
@@ -88,7 +92,8 @@ const dummyData = {
       timezone: "America/Los_Angeles",
       bio: "Engineering leader specializing in distributed systems",
       responsibilities: ["Product Development", "Team Management", "Technical Architecture"],
-      managerEmail: "michael.chen@techcorp.com"
+      managerEmail: "michael.chen@techcorp.com",
+      enneagram_type: "1"
     },
     {
       name: "Robert Martinez",
@@ -100,7 +105,8 @@ const dummyData = {
       timezone: "America/Chicago",
       bio: "Sales executive with track record of exceeding targets",
       responsibilities: ["Sales Strategy", "Client Relations", "Revenue Growth"],
-      managerEmail: "sarah.johnson@techcorp.com"
+      managerEmail: "sarah.johnson@techcorp.com",
+      enneagram_type: "3"
     },
     {
       name: "Jennifer Lee",
@@ -112,7 +118,8 @@ const dummyData = {
       timezone: "America/Chicago",
       bio: "People-first HR leader building inclusive cultures",
       responsibilities: ["Talent Acquisition", "Employee Experience", "Culture Development"],
-      managerEmail: "sarah.johnson@techcorp.com"
+      managerEmail: "sarah.johnson@techcorp.com",
+      enneagram_type: "2"
     },
     // Directors
     {
@@ -125,7 +132,8 @@ const dummyData = {
       timezone: "America/Los_Angeles",
       bio: "Frontend architect passionate about user experience",
       responsibilities: ["Frontend Architecture", "UI/UX Standards", "Team Leadership"],
-      managerEmail: "lisa.thompson@techcorp.com"
+      managerEmail: "lisa.thompson@techcorp.com",
+      enneagram_type: "6"
     },
     {
       name: "Maria Garcia",
@@ -137,7 +145,8 @@ const dummyData = {
       timezone: "America/Denver",
       bio: "Backend specialist focused on scalability and performance",
       responsibilities: ["Backend Systems", "API Design", "Infrastructure"],
-      managerEmail: "lisa.thompson@techcorp.com"
+      managerEmail: "lisa.thompson@techcorp.com",
+      enneagram_type: "5"
     },
     {
       name: "James Wilson",
@@ -149,7 +158,8 @@ const dummyData = {
       timezone: "America/New_York",
       bio: "Product marketing strategist driving go-to-market success",
       responsibilities: ["Product Positioning", "Launch Strategy", "Market Analysis"],
-      managerEmail: "david.kim@techcorp.com"
+      managerEmail: "david.kim@techcorp.com",
+      enneagram_type: "7"
     },
     // Senior Engineers
     {
@@ -162,7 +172,8 @@ const dummyData = {
       timezone: "America/Los_Angeles",
       bio: "React specialist building delightful user interfaces",
       responsibilities: ["Feature Development", "Code Reviews", "Mentoring"],
-      managerEmail: "alex.wang@techcorp.com"
+      managerEmail: "alex.wang@techcorp.com",
+      enneagram_type: "4"
     },
     {
       name: "Daniel Brown",
@@ -174,7 +185,8 @@ const dummyData = {
       timezone: "America/New_York",
       bio: "Distributed systems engineer with cloud expertise",
       responsibilities: ["System Design", "Performance Optimization", "Technical Documentation"],
-      managerEmail: "maria.garcia@techcorp.com"
+      managerEmail: "maria.garcia@techcorp.com",
+      enneagram_type: "5"
     },
     {
       name: "Rachel Green",
@@ -186,7 +198,8 @@ const dummyData = {
       timezone: "America/New_York",
       bio: "Data pipeline architect enabling data-driven decisions",
       responsibilities: ["Data Infrastructure", "ETL Pipelines", "Analytics Support"],
-      managerEmail: "maria.garcia@techcorp.com"
+      managerEmail: "maria.garcia@techcorp.com",
+      enneagram_type: "6"
     },
     // Mid-level employees
     {
@@ -200,7 +213,7 @@ const dummyData = {
       bio: "Full-stack developer passionate about clean code",
       responsibilities: ["Feature Implementation", "Bug Fixes", "Testing"],
       managerEmail: "sophie.anderson@techcorp.com",
-      enneagram_type: "9 - The Peacemaker"
+      enneagram_type: "9"
     },
     {
       name: "Amanda White",
@@ -212,7 +225,8 @@ const dummyData = {
       timezone: "America/Chicago",
       bio: "Digital marketing specialist driving online engagement",
       responsibilities: ["Campaign Management", "Content Strategy", "Analytics"],
-      managerEmail: "james.wilson@techcorp.com"
+      managerEmail: "james.wilson@techcorp.com",
+      enneagram_type: "3"
     },
     {
       name: "Chris Taylor",
@@ -224,7 +238,8 @@ const dummyData = {
       timezone: "America/Chicago",
       bio: "Sales professional focused on enterprise accounts",
       responsibilities: ["Account Management", "Deal Closing", "Client Success"],
-      managerEmail: "robert.martinez@techcorp.com"
+      managerEmail: "robert.martinez@techcorp.com",
+      enneagram_type: "8"
     },
     {
       name: "Nicole Davis",
@@ -236,7 +251,8 @@ const dummyData = {
       timezone: "America/Phoenix",
       bio: "HR generalist supporting employee lifecycle",
       responsibilities: ["Recruiting", "Onboarding", "Employee Relations"],
-      managerEmail: "jennifer.lee@techcorp.com"
+      managerEmail: "jennifer.lee@techcorp.com",
+      enneagram_type: "2"
     },
     {
       name: "Brian Miller",
@@ -248,7 +264,8 @@ const dummyData = {
       timezone: "America/New_York",
       bio: "Financial analyst providing data-driven insights",
       responsibilities: ["Financial Modeling", "Budget Analysis", "Reporting"],
-      managerEmail: "emily.rodriguez@techcorp.com"
+      managerEmail: "emily.rodriguez@techcorp.com",
+      enneagram_type: "6"
     }
   ]
 }
