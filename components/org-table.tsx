@@ -549,14 +549,14 @@ export default function OrgTable({
           phone: newPerson.phone || null,
           location: newPerson.location || null,
           timezone: newPerson.timezone || null,
-          enneagram_type: newPerson.enneagram_type || null,
+          enneagram_type: newPerson.enneagram_type === "not-set" ? null : (newPerson.enneagram_type || null),
         })
         .select();
         
       if (personError) throw personError;
       
       // Add reporting relationship if manager is specified
-      if (newPerson.manager_email) {
+      if (newPerson.manager_email && newPerson.manager_email !== "no-manager") {
         // First, get the manager's ID from their email
         const { data: managerData, error: managerError } = await supabase
           .from('people')
@@ -594,9 +594,10 @@ export default function OrgTable({
       
       // Close add person dialog
       setIsAddingPerson(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error adding person:", err);
-      setError("Failed to add person. Please try again.");
+      const errorMessage = err?.message || "Failed to add person. Please try again.";
+      setError(errorMessage);
     }
   };
 
@@ -1745,7 +1746,12 @@ export default function OrgTable({
       </Dialog>
       
       {/* Add Person Dialog */}
-      <Dialog open={isAddingPerson} onOpenChange={setIsAddingPerson}>
+      <Dialog open={isAddingPerson} onOpenChange={(open) => {
+        setIsAddingPerson(open);
+        if (open) {
+          setError(null); // Clear any previous errors
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Person</DialogTitle>
