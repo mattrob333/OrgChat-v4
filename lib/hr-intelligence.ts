@@ -87,40 +87,34 @@ const ENNEAGRAM_COMPATIBILITY = {
 }
 
 export class HRIntelligence {
-  private supabase = createServerSupabaseClient()
-
   // ========== PEOPLE QUERIES ==========
   
   async getEmployeeByName(name: string): Promise<Person | null> {
     console.log('Searching for employee by name:', name);
+    
     try {
-      const { data, error } = await this.supabase
+      const supabase = createServerSupabaseClient()
+      const { data, error } = await supabase
         .from('people')
         .select('*')
         .ilike('name', `%${name}%`);
       
       if (error) {
-        console.error('Error fetching employee by name:', error);
+        console.error('Error searching for employee:', error);
         return null;
       }
       
-      console.log('Found employees:', data);
-      
-      // Return first match or null if no matches
       if (!data || data.length === 0) {
-        console.log('No employees found matching name:', name);
+        console.log('No employee found with name:', name);
         return null;
       }
       
-      // If multiple matches, log them and return the first one
-      if (data.length > 1) {
-        console.log(`Found ${data.length} employees matching name '${name}'. Returning first match.`);
-        console.log('Matching employees:', data.map(p => `${p.name} (${p.id})`).join(', '));
-      }
-      
-      return data[0];
-    } catch (e) {
-      console.error('Exception in getEmployeeByName:', e);
+      // Return the first match
+      const person = data[0];
+      console.log('Found employee:', person.name, person.role);
+      return person;
+    } catch (error) {
+      console.error('Error in getEmployeeByName:', error);
       return null;
     }
   }
@@ -128,21 +122,21 @@ export class HRIntelligence {
   async getEmployeeByEmail(email: string): Promise<Person | null> {
     console.log('Searching for employee by email:', email)
     try {
-      const { data, error } = await this.supabase
+      const supabase = createServerSupabaseClient()
+      const { data, error } = await supabase
         .from('people')
         .select('*')
         .eq('email', email)
         .single()
       
       if (error) {
-        console.error('Error fetching employee by email:', error)
+        console.error('Error searching for employee by email:', error)
         return null
       }
       
-      console.log('Found employee:', data)
       return data
-    } catch (e) {
-      console.error('Exception in getEmployeeByEmail:', e)
+    } catch (error) {
+      console.error('Error in getEmployeeByEmail:', error)
       return null
     }
   }
@@ -150,33 +144,31 @@ export class HRIntelligence {
   async getEmployeesByDepartment(departmentName: string): Promise<Person[]> {
     console.log('Searching for employees by department:', departmentName)
     try {
+      const supabase = createServerSupabaseClient()
       // First get the department
-      const { data: department } = await this.supabase
+      const { data: department } = await supabase
         .from('departments')
         .select('id')
         .ilike('name', `%${departmentName}%`)
         .single()
       
       if (!department) {
-        console.log('Department not found:', departmentName)
         return []
       }
       
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('people')
         .select('*')
         .eq('department_id', department.id)
-        .order('name')
       
       if (error) {
-        console.error('Error fetching employees by department:', error)
+        console.error('Error searching for employees by department:', error)
         return []
       }
       
-      console.log('Found employees:', data)
       return data || []
-    } catch (e) {
-      console.error('Exception in getEmployeesByDepartment:', e)
+    } catch (error) {
+      console.error('Error in getEmployeesByDepartment:', error)
       return []
     }
   }
@@ -184,21 +176,20 @@ export class HRIntelligence {
   async getEmployeesByRole(role: string): Promise<Person[]> {
     console.log('Searching for employees by role:', role)
     try {
-      const { data, error } = await this.supabase
+      const supabase = createServerSupabaseClient()
+      const { data, error } = await supabase
         .from('people')
         .select('*')
         .ilike('role', `%${role}%`)
-        .order('name')
       
       if (error) {
-        console.error('Error fetching employees by role:', error)
+        console.error('Error searching for employees by role:', error)
         return []
       }
       
-      console.log('Found employees:', data)
       return data || []
-    } catch (e) {
-      console.error('Exception in getEmployeesByRole:', e)
+    } catch (error) {
+      console.error('Error in getEmployeesByRole:', error)
       return []
     }
   }
@@ -206,21 +197,20 @@ export class HRIntelligence {
   async getEmployeesByEnneagramType(type: string): Promise<Person[]> {
     console.log('Searching for employees by enneagram type:', type)
     try {
-      const { data, error } = await this.supabase
+      const supabase = createServerSupabaseClient()
+      const { data, error } = await supabase
         .from('people')
         .select('*')
         .eq('enneagram_type', type)
-        .order('name')
       
       if (error) {
-        console.error('Error fetching employees by enneagram type:', error)
+        console.error('Error searching for employees by enneagram type:', error)
         return []
       }
       
-      console.log('Found employees:', data)
       return data || []
-    } catch (e) {
-      console.error('Exception in getEmployeesByEnneagramType:', e)
+    } catch (error) {
+      console.error('Error in getEmployeesByEnneagramType:', error)
       return []
     }
   }
@@ -230,27 +220,26 @@ export class HRIntelligence {
   async getManagerForEmployee(employeeId: string): Promise<Person | null> {
     console.log('Searching for manager for employee:', employeeId)
     try {
-      const { data: relationship } = await this.supabase
+      const supabase = createServerSupabaseClient()
+      const { data: relationship } = await supabase
         .from('reporting_relationships')
         .select('manager_id')
         .eq('report_id', employeeId)
         .single()
       
       if (!relationship) {
-        console.log('No manager found for employee:', employeeId)
         return null
       }
       
-      const { data: manager } = await this.supabase
+      const { data: manager } = await supabase
         .from('people')
         .select('*')
         .eq('id', relationship.manager_id)
         .single()
       
-      console.log('Found manager:', manager)
-      return manager || null
-    } catch (e) {
-      console.error('Exception in getManagerForEmployee:', e)
+      return manager
+    } catch (error) {
+      console.error('Error in getManagerForEmployee:', error)
       return null
     }
   }
@@ -258,28 +247,26 @@ export class HRIntelligence {
   async getDirectReports(managerId: string): Promise<Person[]> {
     console.log('Searching for direct reports for manager:', managerId)
     try {
-      const { data: relationships } = await this.supabase
+      const supabase = createServerSupabaseClient()
+      const { data: relationships } = await supabase
         .from('reporting_relationships')
         .select('report_id')
         .eq('manager_id', managerId)
       
       if (!relationships || relationships.length === 0) {
-        console.log('No direct reports found for manager:', managerId)
         return []
       }
       
-      const reportIds = relationships.map(r => r.report_id)
+      const reportIds = relationships.map((r: any) => r.report_id)
       
-      const { data: reports } = await this.supabase
+      const { data: reports } = await supabase
         .from('people')
         .select('*')
         .in('id', reportIds)
-        .order('name')
       
-      console.log('Found direct reports:', reports)
       return reports || []
-    } catch (e) {
-      console.error('Exception in getDirectReports:', e)
+    } catch (error) {
+      console.error('Error in getDirectReports:', error)
       return []
     }
   }
@@ -287,6 +274,7 @@ export class HRIntelligence {
   async getTeamHierarchy(managerId: string): Promise<Person[]> {
     console.log('Searching for team hierarchy for manager:', managerId)
     try {
+      const supabase = createServerSupabaseClient()
       const team: Person[] = []
       const visited = new Set<string>()
       
@@ -314,6 +302,7 @@ export class HRIntelligence {
   async getDelegationChain(employeeId: string): Promise<Person[]> {
     console.log('Searching for delegation chain for employee:', employeeId)
     try {
+      const supabase = createServerSupabaseClient()
       const chain: Person[] = []
       let currentId = employeeId
       
@@ -346,7 +335,8 @@ export class HRIntelligence {
   }): Promise<Document[]> {
     console.log('Searching for documents:', query)
     try {
-      let queryBuilder = this.supabase
+      const supabase = createServerSupabaseClient()
+      let queryBuilder = supabase
         .from('documents')
         .select('*')
       
@@ -378,6 +368,7 @@ export class HRIntelligence {
   async getAccessibleDocuments(personId: string): Promise<Document[]> {
     console.log('Searching for accessible documents for person:', personId)
     try {
+      const supabase = createServerSupabaseClient()
       // Get the person's details to check department
       const person = await this.getEmployeeByEmail(personId)
       if (!person) {
@@ -387,7 +378,7 @@ export class HRIntelligence {
       
       // For now, return all public documents
       // In the future, we'll add department-based access control
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('documents')
         .select('*')
         .eq('is_public', true)
@@ -426,8 +417,9 @@ export class HRIntelligence {
   }> {
     console.log('Analyzing team compatibility for employees:', employeeIds)
     try {
+      const supabase = createServerSupabaseClient()
       // Get all employees
-      const { data: employees } = await this.supabase
+      const { data: employees } = await supabase
         .from('people')
         .select('*')
         .in('id', employeeIds)
@@ -466,42 +458,38 @@ export class HRIntelligence {
           comparisons++
           
           // Check if they work well together
-          if (profile1.worksBestWith.includes(type2)) {
-            compatibilityScore += 1
-            strengths.push(`${profile1.name} and ${profile2.name} complement each other well`)
-          } else if (profile1.challengesWith.includes(type2)) {
-            compatibilityScore -= 0.5
-            challenges.push(`Potential friction between ${profile1.name} and ${profile2.name}`)
-            recommendations.push(`Set clear communication protocols between ${profile1.name} and ${profile2.name}`)
-          } else {
-            compatibilityScore += 0.5 // Neutral compatibility
+          const compatibility = profile1.worksBestWith.includes(type2)
+          if (compatibility) {
+            compatibilityScore++
+          }
+          
+          // Add specific insights
+          if (profile1.challengesWith.includes(type2)) {
+            challenges.push(`${employees[i].name} (Type ${type1}) may have challenges working with ${employees[j].name} (Type ${type2})`)
           }
         }
       }
       
-      // Normalize compatibility score
-      const normalizedCompatibility = comparisons > 0 
-        ? (compatibilityScore / comparisons + 1) / 2 * 100 
-        : 50
+      // Calculate overall score
+      const overallScore = comparisons > 0 ? Math.round((compatibilityScore / comparisons) * 100) : 0
       
-      console.log('Team compatibility analysis:', {
-        compatibility: Math.round(normalizedCompatibility),
-        strengths: [...new Set(strengths)],
-        challenges: [...new Set(challenges)],
-        recommendations: [...new Set(recommendations)]
-      })
-      return {
-        compatibility: Math.round(normalizedCompatibility),
-        strengths: [...new Set(strengths)],
-        challenges: [...new Set(challenges)],
-        recommendations: [...new Set(recommendations)]
+      // Add recommendations based on team composition
+      if (types.includes('8') && types.includes('2')) {
+        recommendations.push('The combination of Type 8 (Leader) and Type 2 (Helper) can be very effective')
       }
-    } catch (e) {
-      console.error('Exception in analyzeTeamCompatibility:', e)
+      
+      return {
+        compatibility: overallScore,
+        strengths,
+        challenges,
+        recommendations
+      }
+    } catch (error: any) {
+      console.error('Exception in analyzeTeamCompatibility:', error)
       return {
         compatibility: 0,
         strengths: [],
-        challenges: [],
+        challenges: ['Error analyzing team compatibility'],
         recommendations: []
       }
     }
@@ -510,6 +498,7 @@ export class HRIntelligence {
   async getCompatibleTeamMembers(employeeId: string, projectType?: string): Promise<Person[]> {
     console.log('Searching for compatible team members for employee:', employeeId)
     try {
+      const supabase = createServerSupabaseClient()
       const employee = await this.getEmployeeByEmail(employeeId)
       if (!employee || !employee.enneagram_type) {
         console.log('Employee not found or no enneagram type:', employeeId)
@@ -544,7 +533,8 @@ export class HRIntelligence {
   async searchEmployees(query: string): Promise<Person[]> {
     console.log('Searching for employees:', query)
     try {
-      const { data, error } = await this.supabase
+      const supabase = createServerSupabaseClient()
+      const { data, error } = await supabase
         .from('people')
         .select('*')
         .or(`name.ilike.%${query}%,email.ilike.%${query}%,role.ilike.%${query}%`)
@@ -566,8 +556,9 @@ export class HRIntelligence {
   async getEmployeesWithSkill(skill: string): Promise<Person[]> {
     console.log('Searching for employees with skill:', skill)
     try {
+      const supabase = createServerSupabaseClient()
       // Search in responsibilities array
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('people')
         .select('*')
         .contains('responsibilities', [skill])
@@ -575,7 +566,7 @@ export class HRIntelligence {
       
       if (error) {
         // Fallback to searching in bio and role
-        const { data: fallbackData } = await this.supabase
+        const { data: fallbackData } = await supabase
           .from('people')
           .select('*')
           .or(`bio.ilike.%${skill}%,role.ilike.%${skill}%`)
@@ -596,7 +587,8 @@ export class HRIntelligence {
   async getEmployeesByLocation(location: string): Promise<Person[]> {
     console.log('Searching for employees by location:', location)
     try {
-      const { data, error } = await this.supabase
+      const supabase = createServerSupabaseClient()
+      const { data, error } = await supabase
         .from('people')
         .select('*')
         .ilike('location', `%${location}%`)
