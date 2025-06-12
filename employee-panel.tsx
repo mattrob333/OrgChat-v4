@@ -80,13 +80,11 @@ export default function EmployeePanel({ person, isOpen, onClose, embedded = fals
     setIsLoading(true)
 
     try {
-      // Get conversation history for context
-      const conversationHistory = messages
-        .filter((msg) => msg.id !== "welcome")
-        .map((msg) => ({
-          role: msg.sender === "user" ? "user" : "assistant",
-          content: msg.content,
-        }))
+      // Build conversation history for context
+      const conversationHistory = messages.slice(-6).map((msg) => ({
+        role: msg.sender === "user" ? "user" as const : "assistant" as const,
+        content: msg.content,
+      }))
 
       // Get AI settings for this employee
       const settings = getSettings(person.id)
@@ -155,7 +153,10 @@ export default function EmployeePanel({ person, isOpen, onClose, embedded = fals
         return
       }
       
-      const connectedCalendars = calendarConnections.filter(c => c.connected)
+      const connectedCalendars = calendarConnections.filter(c => {
+        // Check if calendar has a valid access token (indicates it's connected)
+        return c.access_token && c.access_token.length > 0
+      })
       
       if (connectedCalendars.length === 0) {
         toast({
@@ -213,15 +214,6 @@ export default function EmployeePanel({ person, isOpen, onClose, embedded = fals
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-xl font-semibold">Employee Profile</h2>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCheckCalendar}
-              className="flex items-center gap-1 hover:bg-primary/10 hover:text-primary"
-            >
-              <Calendar className="h-4 w-4" />
-              <span>Open Calendar</span>
-            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -296,7 +288,7 @@ export default function EmployeePanel({ person, isOpen, onClose, embedded = fals
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* API Key Missing Alert */}
           {apiKeyMissing && (
-            <Alert variant="warning" className="m-4 border-amber-500 bg-amber-500/10">
+            <Alert variant="default" className="m-4 border-amber-500 bg-amber-500/10">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
               <AlertTitle className="text-amber-500">OpenAI API Key Missing</AlertTitle>
               <AlertDescription className="text-sm">
@@ -405,15 +397,6 @@ export default function EmployeePanel({ person, isOpen, onClose, embedded = fals
           <h2 className="text-xl font-semibold">Employee Profile</h2>
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCheckCalendar}
-              className="flex items-center gap-1 hover:bg-primary/10 hover:text-primary"
-            >
-              <Calendar className="h-4 w-4" />
-              <span>Open Calendar</span>
-            </Button>
-            <Button
               variant="ghost"
               size="icon"
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
@@ -491,7 +474,7 @@ export default function EmployeePanel({ person, isOpen, onClose, embedded = fals
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* API Key Missing Alert */}
           {apiKeyMissing && (
-            <Alert variant="warning" className="m-4 border-amber-500 bg-amber-500/10">
+            <Alert variant="default" className="m-4 border-amber-500 bg-amber-500/10">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
               <AlertTitle className="text-amber-500">OpenAI API Key Missing</AlertTitle>
               <AlertDescription className="text-sm">

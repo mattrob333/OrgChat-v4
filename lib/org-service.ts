@@ -256,13 +256,17 @@ export async function getPersonWithDetails(personId: string): Promise<{
  */
 export async function getOrgChartData(organizationId: string): Promise<OrgChartPerson | null> {
   try {
+    console.log('[getOrgChartData] Starting for organizationId:', organizationId)
+    
     // Check cache first
     if (isCacheValid() && cache.orgChart.has(organizationId)) {
+      console.log('[getOrgChartData] Returning cached data')
       return cache.orgChart.get(organizationId) || null
     }
 
     // Get all people with departments
     const people = await getPeopleWithDepartments(organizationId)
+    console.log('[getOrgChartData] Fetched people:', people.length, people)
     
     // Get all reporting relationships
     const { data: relationships, error: relError } = await supabase
@@ -271,6 +275,7 @@ export async function getOrgChartData(organizationId: string): Promise<OrgChartP
       .eq('organization_id', organizationId)
 
     if (relError) throw relError
+    console.log('[getOrgChartData] Fetched relationships:', relationships?.length, relationships)
 
     // Create a map of people by ID
     const peopleMap = new Map<string, Person & { department: string }>(
@@ -289,13 +294,16 @@ export async function getOrgChartData(organizationId: string): Promise<OrgChartP
     // Find the root person (CEO or person without a manager)
     const reportIds = new Set(relationships?.map(rel => rel.report_id) || [])
     const rootCandidates = people.filter(p => !reportIds.has(p.id))
+    console.log('[getOrgChartData] Root candidates:', rootCandidates)
     
     if (rootCandidates.length === 0) {
+      console.error('[getOrgChartData] No root person found!')
       throw new Error('Could not find root person in organization chart')
     }
 
     // Use the first root candidate (usually the CEO)
     const rootPerson = rootCandidates[0]
+    console.log('[getOrgChartData] Selected root person:', rootPerson)
 
     // Build the tree recursively
     const buildTree = (personId: string): OrgChartPerson | null => {
@@ -314,6 +322,7 @@ export async function getOrgChartData(organizationId: string): Promise<OrgChartP
     }
 
     const orgChart = buildTree(rootPerson.id)
+    console.log('[getOrgChartData] Built org chart:', orgChart)
     
     // Update cache
     if (orgChart) {
@@ -323,7 +332,7 @@ export async function getOrgChartData(organizationId: string): Promise<OrgChartP
 
     return orgChart
   } catch (error) {
-    console.error(`Error building org chart for organization ${organizationId}:`, error)
+    console.error(`[getOrgChartData] Error building org chart for organization ${organizationId}:`, error)
     return null
   }
 }

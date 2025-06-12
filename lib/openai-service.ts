@@ -10,6 +10,7 @@ import {
   getDepartments,
   getOrgChartData
 } from "@/lib/org-service"
+import { supabase } from "@/lib/supabase"
 
 export interface AISettings {
   model: string
@@ -57,65 +58,123 @@ async function generateHRAssistantSystemPrompt(): Promise<string> {
     // Fetch the org chart to understand the hierarchy
     const orgChart = await getOrgChartData(organization.id)
     
-    // Build department summaries
-    const departmentSummaries = departments.map(dept => {
-      const deptMembers = people.filter(p => p.department === dept.name)
-      return `${dept.name} Department (${deptMembers.length} members)`
-    }).join("\n- ")
+    // Also fetch all people with their reporting relationships
+    const { data: peopleWithManagers } = await supabase
+      .from('people')
+      .select(`
+        id,
+        name,
+        role,
+        department_id,
+        departments!inner(name),
+        manager:reporting_relationships!report_id(
+          manager:people!manager_id(id, name)
+        )
+      `)
+      .eq('organization_id', organization.id)
     
-    // Build team member summaries (limit to key roles for brevity)
-    const keyPeopleInfo = people
-      .filter(p => p.role.toLowerCase().includes("chief") || 
-                  p.role.toLowerCase().includes("director") || 
-                  p.role.toLowerCase().includes("vp") || 
-                  p.role.toLowerCase().includes("manager"))
-      .map(p => `- ${p.name}: ${p.role} in ${p.department}${p.responsibilities ? ` - Skills: ${p.responsibilities.join(", ")}` : ""}`)
-      .join("\n")
+    // Build comprehensive team member profiles for ALL employees
+    const allTeamProfiles = people.map(person => {
+      let profile = `${person.name} (${person.role} - ${person.department})`
+      
+      const details = []
+      if (person.enneagram_type) {
+        details.push(`Enneagram Type ${person.enneagram_type}`)
+      }
+      if (person.location) {
+        details.push(`Location: ${person.location}`)
+      }
+      if (person.timezone) {
+        details.push(`Timezone: ${person.timezone}`)
+      }
+      if (person.responsibilities && person.responsibilities.length > 0) {
+        details.push(`Skills: ${person.responsibilities.join(", ")}`)
+      }
+      
+      if (details.length > 0) {
+        profile += `\n  - ${details.join("\n  - ")}`
+      }
+      
+      return profile
+    }).join("\n\n")
     
-    // Count team members by department
-    const deptCounts: Record<string, number> = {}
-    people.forEach(p => {
-      deptCounts[p.department] = (deptCounts[p.department] || 0) + 1
-    })
+    // Build department structure with member counts
+    const departmentStructure = departments.map(dept => {
+      const members = people.filter(p => p.department === dept.name)
+      const memberList = members.map(m => `  - ${m.name} (${m.role})`).join("\n")
+      return `${dept.name} (${members.length} members):\n${memberList}`
+    }).join("\n\n")
     
-    const orgSummary = `
-Organization: ${organization.name}
-Total Employees: ${people.length}
-Departments: ${departments.length}
-- ${departmentSummaries}
-
-Key Team Members:
-${keyPeopleInfo}
-`
+    // Build reporting relationships from the org chart
+    const reportingRelationships: string[] = []
     
-    return `You are an HR Assistant with comprehensive knowledge of the organization's structure, employees, and their skills. Your role is to help users find information about team members, recommend people for projects, and answer questions about the organization.
+    const buildHierarchy = (person: OrgChartPerson | null, level: number = 0): void => {
+      if (!person) return
+      
+      const indent = "  ".repeat(level)
+      reportingRelationships.push(`${indent}${level > 0 ? '- ' : ''}${person.name} (${person.role})`)
+      
+      if (person.children && person.children.length > 0) {
+        person.children.forEach(child => buildHierarchy(child, level + 1))
+      }
+    }
+    
+    // Build the hierarchy starting from the root
+    if (orgChart) {
+      buildHierarchy(orgChart, 0)
+    }
+    
+    return `You are the HR Assistant and Team Orchestrator for ${organization.name}. Your primary role is to be the central intelligence hub that understands every team member deeply - their skills, personality types, work styles, and capabilities. You orchestrate the entire organization by intelligently matching people to tasks, facilitating collaboration, and optimizing team performance.
 
-ORGANIZATION INFORMATION:
-${orgSummary}
+YOUR CORE MISSION:
+You are the orchestrator of this organization. You know each person's strengths, personality type (Enneagram), skills, and how they work best. Your job is to:
+1. Intelligently delegate tasks to the most suitable team members
+2. Form optimal project teams based on complementary skills and personalities
+3. Understand team dynamics and suggest improvements
+4. Provide deep insights about any team member when asked
+5. Act as the central knowledge hub for all personnel matters
 
-CAPABILITIES:
-1. Recommend team members for projects based on skills, experience, and availability
-2. Provide information about departments and team structure
-3. Answer questions about specific employees' roles and responsibilities
-4. Help with understanding reporting relationships and the organization chart
+COMPLETE TEAM ROSTER:
+${allTeamProfiles}
 
-When recommending people for projects:
-- Match required skills with employee expertise
-- Consider reporting structures and departments
-- Provide specific names and explain why they're suitable
-- For technical tasks, prioritize Technology/Engineering team members
-- Suggest multiple options when relevant
+DEPARTMENT STRUCTURE:
+${departmentStructure}
 
-When answering questions about the organization:
-- Provide accurate information based on the organization data
-- Be helpful and informative
-- If you don't have specific information, acknowledge limitations
-- Offer to help find additional information if needed
+ORGANIZATIONAL HIERARCHY:
+${reportingRelationships.join("\n")}
 
-Always maintain a professional, helpful tone and prioritize providing accurate information about the organization.`
+KEY ORCHESTRATION PRINCIPLES:
+1. Task Delegation: When asked to assign tasks, consider:
+   - Required skills vs. team member capabilities
+   - Personality types and work styles (use Enneagram insights)
+   - Current workload and availability
+   - Growth opportunities for team members
+   - Team dynamics and collaboration potential
+
+2. Team Formation: When building project teams:
+   - Balance technical skills with soft skills
+   - Consider personality compatibility (Enneagram types)
+   - Mix experience levels for mentorship opportunities
+   - Ensure diverse perspectives and departments
+
+3. Personality Insights: Use Enneagram types to:
+   - Predict work styles and motivations
+   - Suggest communication approaches
+   - Identify potential conflicts or synergies
+   - Recommend management strategies
+
+4. Knowledge Sharing: You have complete knowledge of:
+   - Every team member's profile and capabilities
+   - Department structures and functions
+   - Reporting relationships and team dynamics
+   - Individual strengths and growth areas
+
+IMPORTANT: You have access to real-time data from the organization's database. Always provide specific, actionable recommendations based on actual team members and their profiles. Never make up or assume information - use only the data provided above.
+
+When users ask questions, be specific and reference actual team members by name. Explain your reasoning, especially when it involves personality types or skill matching. You are the trusted advisor who knows this team better than anyone else.`
   } catch (error) {
     console.error("Error generating HR Assistant system prompt:", error)
-    return "You are an HR Assistant. You help users find information about team members and the organization structure."
+    return "You are an HR Assistant. An error occurred while loading organization data."
   }
 }
 
@@ -197,10 +256,25 @@ export async function generateSystemPrompt(personId: string, settings: AISetting
       : "\nYou don't have any direct reports."
 
     // Format calendar information
-    const hasCalendar = calendarConnections.length > 0 && calendarConnections.some(c => c.connected)
+    const hasCalendar = calendarConnections.length > 0
     const calendarText = hasCalendar
       ? "\nYou have calendar integration enabled and can reference your schedule when asked about availability."
       : "\nYou don't have calendar integration set up yet."
+
+    // Format profile details
+    const profileDetails = []
+    if (person.enneagram_type) {
+      profileDetails.push(`Enneagram Type: ${person.enneagram_type}`)
+    }
+    if (person.location) {
+      profileDetails.push(`Location: ${person.location}`)
+    }
+    if (person.timezone) {
+      profileDetails.push(`Timezone: ${person.timezone}`)
+    }
+    const profileText = profileDetails.length > 0
+      ? `\nProfile Details:\n${profileDetails.map(detail => `- ${detail}`).join('\n')}`
+      : ""
 
     return `You are an AI assistant embodying ${person.name}, who works as ${person.role} in the ${
       person.department
@@ -210,6 +284,7 @@ export async function generateSystemPrompt(personId: string, settings: AISetting
   
 Background information:
 ${person.bio || "No specific background information available."}
+${profileText}
 ${responsibilitiesText}
 ${tasksText}
 ${teamText}
@@ -501,11 +576,11 @@ export async function getAIResponse(
     if (isAvailabilityQuestion(message)) {
       try {
         const calendarConnections = await getCalendarConnections(personId)
-        const connectedCalendars = calendarConnections.filter(c => c.connected)
+        const hasConnectedCalendars = calendarConnections.length > 0
         
-        if (connectedCalendars.length > 0) {
-          // Get upcoming events for the first connected calendar
-          const calendarId = connectedCalendars[0].id
+        if (hasConnectedCalendars) {
+          // Get upcoming events for the first calendar connection
+          const calendarId = calendarConnections[0].id
           const events = await getCalendarEvents(calendarId)
           
           // Filter to events in the next 7 days

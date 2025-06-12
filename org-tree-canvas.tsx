@@ -551,6 +551,22 @@ export default function OrgTreeCanvas({
             </Button>
             <SettingsButton />
           </div>
+          
+          {/* Organization Selector */}
+          {organizations.length > 1 && (
+            <div className="absolute top-4 right-4 bg-background/90 backdrop-blur-sm p-2 rounded-lg shadow-md border border-border">
+              <select 
+                value={selectedOrgId} 
+                onChange={(e) => setSelectedOrgId(e.target.value)}
+                className="px-3 py-1 rounded border border-border bg-background text-foreground"
+              >
+                <option value="">Select Organization</option>
+                {organizations.map(org => (
+                  <option key={org.id} value={org.id}>{org.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </>
       )}
 

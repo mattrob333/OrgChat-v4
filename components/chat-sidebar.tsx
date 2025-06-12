@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ChevronRight, MessageSquare, User } from "lucide-react"
 import EmployeePanel from "../employee-panel"
+import { HRAssistantPanel } from "./hr-assistant-panel"
 import { cn } from "@/lib/utils"
-import type { Person } from "../types/person"
+import type { Person } from "@/types/person"
 
 interface ChatSidebarProps {
   className?: string
@@ -65,9 +66,7 @@ export default function ChatSidebar({ className }: ChatSidebarProps) {
             </TabsTrigger>
           </TabsList>
           <TabsContent value="hr" className="h-[calc(100vh-48px)] overflow-hidden">
-            <div className="flex h-full items-center justify-center">
-              <p className="text-muted-foreground">HR Assistant Chat Panel</p>
-            </div>
+            <HRAssistantPanel isOpen={true} embedded={true} />
           </TabsContent>
           <TabsContent value="employee" className="h-[calc(100vh-48px)] overflow-hidden">
             {selectedPerson ? (
