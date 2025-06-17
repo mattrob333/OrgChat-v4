@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
 import OrgTreeCanvas from "../org-tree-canvas"
 import OrgTable from "@/components/org-table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -18,11 +19,12 @@ export default function Page() {
   const [sidebarWidth] = useState(60)
   const orgChartContainerRef = useRef<HTMLDivElement>(null)
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 })
+  const router = useRouter()
 
   // Function to handle selecting a person from the org chart
   const handleSelectPerson = (person: Person) => {
-    setSelectedPerson(person)
-    setActiveTab("employee")
+    // Navigate to the employee workspace page
+    router.push(`/workspace/${person.id}`)
   }
 
   // Update container dimensions on resize

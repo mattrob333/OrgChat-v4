@@ -89,6 +89,30 @@ const ENNEAGRAM_COMPATIBILITY = {
 export class HRIntelligence {
   // ========== PEOPLE QUERIES ==========
   
+  async getPersonById(id: string): Promise<Person | null> {
+    console.log('Searching for person by ID:', id);
+    
+    try {
+      const supabase = createServerSupabaseClient()
+      const { data, error } = await supabase
+        .from('people')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error) {
+        console.error('Error searching for person by ID:', error);
+        return null;
+      }
+      
+      console.log('Found person:', data.name, data.role);
+      return data;
+    } catch (error) {
+      console.error('Error in getPersonById:', error);
+      return null;
+    }
+  }
+
   async getEmployeeByName(name: string): Promise<Person | null> {
     console.log('Searching for employee by name:', name);
     
@@ -610,3 +634,8 @@ export class HRIntelligence {
 
 // Export a singleton instance
 export const hrIntelligence = new HRIntelligence()
+
+// Export convenience functions
+export const getPersonById = (id: string) => hrIntelligence.getPersonById(id)
+export const getEmployeeByName = (name: string) => hrIntelligence.getEmployeeByName(name)
+export const getEmployeeByEmail = (email: string) => hrIntelligence.getEmployeeByEmail(email)
